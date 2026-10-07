@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Security News Digest</title>
+<style>
+:root {
+  --bg: #f6f7f9; --panel: #ffffff; --text: #1b1f24; --muted: #5b6470; --border: #dde1e6;
+  --accent: #2459d6; --accent-soft: #e6eefc; --chip: #eef0f3; --warn: #a15c00; --warn-soft: #fff3e0;
+  --cve: #8a1c1c; --cve-soft: #fdecec;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111418; --panel: #1a1e24; --text: #e6e9ed; --muted: #9aa3ad; --border: #2c323a;
+    --accent: #7aa2ff; --accent-soft: #1f2a44; --chip: #252b33; --warn: #ffb860; --warn-soft: #3a2a12;
+    --cve: #ff9b9b; --cve-soft: #3b1d1d;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111418; --panel: #1a1e24; --text: #e6e9ed; --muted: #9aa3ad; --border: #2c323a;
+  --accent: #7aa2ff; --accent-soft: #1f2a44; --chip: #252b33; --warn: #ffb860; --warn-soft: #3a2a12;
+  --cve: #ff9b9b; --cve-soft: #3b1d1d;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+header { padding: 20px 16px 8px; max-width: 1200px; margin: 0 auto; }
+h1 { margin: 0; font-size: 22px; }
+.sub { color: var(--muted); font-size: 13px; }
+.layout { display: grid; grid-template-columns: 280px 1fr; gap: 16px; max-width: 1200px; margin: 0 auto; padding: 8px 16px 40px; }
+@media (max-width: 820px) { .layout { grid-template-columns: 1fr; } aside { position: static !important; max-height: none !important; } }
+aside { position: sticky; top: 12px; align-self: start; max-height: calc(100vh - 24px); overflow: auto; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
+aside h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 14px 0 6px; display: flex; justify-content: space-between; }
+aside h3 button { font-size: 11px; text-transform: none; letter-spacing: 0; }
+input[type=search], input[type=date], select { width: 100%; padding: 7px 9px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); font: inherit; }
+.chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.chip { border: 1px solid var(--border); background: var(--chip); color: var(--text); border-radius: 999px; padding: 3px 9px; font-size: 12.5px; cursor: pointer; }
+.chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--panel); }
+.chip .n { opacity: .7; margin-left: 3px; }
+button.link { background: none; border: 0; color: var(--accent); cursor: pointer; padding: 0; font: inherit; }
+label.toggle { display: flex; gap: 8px; align-items: center; font-size: 14px; margin-top: 6px; cursor: pointer; }
+.toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; margin-bottom: 12px; position: sticky; top: 0; z-index: 2; }
+.toolbar .count { color: var(--muted); font-size: 13.5px; margin-right: auto; }
+.btn { border: 1px solid var(--border); background: var(--panel); color: var(--text); border-radius: 6px; padding: 6px 11px; cursor: pointer; font: inherit; font-size: 13.5px; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--panel); }
+.btn:disabled { opacity: .5; cursor: default; }
+.toolbar select { width: auto; }
+h2.group { font-size: 16px; margin: 20px 0 8px; display: flex; gap: 8px; align-items: baseline; }
+h2.group span { color: var(--muted); font-weight: normal; font-size: 13px; }
+article { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; margin-bottom: 8px; display: grid; grid-template-columns: 22px 1fr; gap: 6px 8px; }
+article.sel { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+article input { margin-top: 4px; width: 16px; height: 16px; }
+article h4 { margin: 0; font-size: 15.5px; line-height: 1.35; }
+article h4 a { color: var(--text); text-decoration: none; }
+article h4 a:hover { color: var(--accent); text-decoration: underline; }
+.meta { color: var(--muted); font-size: 12.5px; margin: 2px 0 6px; }
+.summary { font-size: 14px; margin: 0; overflow-wrap: anywhere; }
+.tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+.tag { font-size: 11.5px; padding: 1px 7px; border-radius: 4px; background: var(--accent-soft); color: var(--accent); }
+.tag.ind { background: var(--chip); color: var(--muted); }
+.tag.cve { background: var(--cve-soft); color: var(--cve); font-family: ui-monospace, monospace; }
+.tag.hot { background: var(--warn-soft); color: var(--warn); }
+.errors { background: var(--warn-soft); color: var(--warn); border-radius: 8px; padding: 8px 12px; font-size: 13px; margin-bottom: 12px; }
+.errors summary { cursor: pointer; }
+.empty { color: var(--muted); text-align: center; padding: 40px 0; }
+.toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--text); color: var(--bg); padding: 8px 14px; border-radius: 6px; font-size: 14px; opacity: 0; transition: opacity .2s; pointer-events: none; }
+.toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Cybersecurity News Digest</h1>
+  <div class="sub" id="sub"></div>
+</header>
+<div class="layout">
+  <aside>
+    <input type="search" id="q" placeholder="Search titles, summaries, CVEs…" aria-label="Search">
+    <h3>Category <button class="link" data-clear="topics">clear</button></h3>
+    <div class="chips" id="topics"></div>
+    <h3>Industry <button class="link" data-clear="industries">clear</button></h3>
+    <div class="chips" id="industries"></div>
+    <h3>Source</h3>
+    <select id="source"><option value="">All sources</option></select>
+    <h3>Published on or after</h3>
+    <input type="date" id="from">
+    <label class="toggle"><input type="checkbox" id="cveOnly"> Only articles mentioning CVEs</label>
+    <label class="toggle"><input type="checkbox" id="selOnly"> Only selected articles</label>
+  </aside>
+  <main>
+    <div id="errors"></div>
+    <div class="toolbar">
+      <span class="count" id="count"></span>
+      <select id="group" aria-label="Group by">
+        <option value="topic">Group by category</option>
+        <option value="industry">Group by industry</option>
+        <option value="date">Group by day</option>
+        <option value="source">Group by source</option>
+        <option value="none">No grouping</option>
+      </select>
+      <button class="btn" id="selAll">Select visible</button>
+      <button class="btn" id="selNone">Clear selection</button>
+      <button class="btn primary" id="copy">Copy selected as Markdown</button>
+      <button class="btn" id="download">Download .md</button>
+    </div>
+    <div id="list"></div>
+  </main>
+</div>
+<div class="toast" id="toast"></div>
+<script>
+const DATA = /*__DATA__*/null;
+const $ = (id) => document.getElementById(id);
+const topicName = Object.fromEntries(DATA.topics.map(t => [t.id, t.name]));
+const indName = Object.fromEntries(DATA.industries.map(t => [t.id, t.name]));
+const arts = DATA.articles.map((a, i) => ({ ...a, i, date: a.published ? new Date(a.published) : null }));
+const state = { topics: new Set(), industries: new Set(), selected: new Set() };
+const store = (() => { try { return window.localStorage; } catch (e) { return null; } })();
+const KEY = "secnews-selected:" + DATA.generated;
+try { JSON.parse(store?.getItem(KEY) || "[]").forEach(l => { const a = arts.find(x => x.link === l); if (a) state.selected.add(a.i); }); } catch (e) {}
+const save = () => { try { store?.setItem(KEY, JSON.stringify([...state.selected].map(i => arts[i].link))); } catch (e) {} };
+
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const safeUrl = (u) => /^https?:\/\//i.test(u) ? u : "#";
+const fmtDate = (d) => d ? d.toISOString().slice(0, 10) : "undated";
+
+$("sub").textContent = `${DATA.period} · ${arts.length} articles from ${new Set(arts.map(a => a.source)).size} sources · generated ${DATA.generated}`;
+
+const errs = Object.entries(DATA.errors || {});
+if (errs.length) {
+  $("errors").innerHTML = `<details class="errors"><summary>${errs.length} source(s) could not be fetched</summary><ul>${errs.map(([s, e]) => `<li><b>${esc(s)}</b>: ${esc(e)}</li>`).join("")}</ul></details>`;
+}
+
+function buildChips(el, items, key, field) {
+  const counts = {};
+  arts.forEach(a => a[field].forEach(id => counts[id] = (counts[id] || 0) + 1));
+  el.innerHTML = items.filter(t => counts[t.id]).map(t =>
+    `<button class="chip" aria-pressed="false" data-id="${t.id}">${esc(t.name)}<span class="n">${counts[t.id]}</span></button>`).join("") || '<span class="sub">none</span>';
+  el.addEventListener("click", (e) => {
+    const b = e.target.closest(".chip"); if (!b) return;
+    const s = state[key], id = b.dataset.id;
+    s.has(id) ? s.delete(id) : s.add(id);
+    b.setAttribute("aria-pressed", s.has(id));
+    draw();
+  });
+}
+buildChips($("topics"), DATA.topics, "topics", "topics");
+buildChips($("industries"), DATA.industries, "industries", "industries");
+document.querySelectorAll("[data-clear]").forEach(b => b.addEventListener("click", () => {
+  state[b.dataset.clear].clear();
+  $(b.dataset.clear).querySelectorAll(".chip").forEach(c => c.setAttribute("aria-pressed", "false"));
+  draw();
+}));
+[...new Set(arts.map(a => a.source))].sort().forEach(s => $("source").insertAdjacentHTML("beforeend", `<option>${esc(s)}</option>`));
+["q", "source", "from", "cveOnly", "selOnly", "group"].forEach(id => $(id).addEventListener("input", draw));
+
+function visible() {
+  const q = $("q").value.trim().toLowerCase(), src = $("source").value, from = $("from").value;
+  return arts.filter(a =>
+    (!state.topics.size || a.topics.some(t => state.topics.has(t))) &&
+    (!state.industries.size || a.industries.some(t => state.industries.has(t))) &&
+    (!src || a.source === src) &&
+    (!from || (a.date && fmtDate(a.date) >= from)) &&
+    (!$("cveOnly").checked || a.cves.length) &&
+    (!$("selOnly").checked || state.selected.has(a.i)) &&
+    (!q || (a.title + " " + a.summary + " " + a.cves.join(" ") + " " + a.source).toLowerCase().includes(q)));
+}
+
+function groupKey(a, mode) {
+  if (mode === "topic") {
+    const active = state.topics.size ? a.topics.find(t => state.topics.has(t)) : null;
+    return [active || a.topics[0]];
+  }
+  if (mode === "industry") return a.industries.length ? [a.industries[0]] : ["_none"];
+  if (mode === "date") return [fmtDate(a.date)];
+  if (mode === "source") return [a.source];
+  return [""];
+}
+function groupLabel(k, mode) {
+  if (mode === "topic") return topicName[k] || k;
+  if (mode === "industry") return k === "_none" ? "No specific industry" : indName[k];
+  return k;
+}
+function groupOrder(mode) {
+  if (mode === "topic") return DATA.topics.map(t => t.id);
+  if (mode === "industry") return DATA.industries.map(t => t.id).concat("_none");
+  return null;
+}
+
+function card(a) {
+  const tags = a.topics.filter(t => t !== "general").map(t => `<span class="tag">${esc(topicName[t])}</span>`)
+    .concat(a.industries.map(t => `<span class="tag ind">${esc(indName[t])}</span>`))
+    .concat(a.cves.map(c => `<span class="tag cve">${esc(c)}</span>`));
+  if (a.also_reported_by.length) tags.unshift(`<span class="tag hot" title="${esc(a.also_reported_by.join(", "))}">${a.also_reported_by.length + 1} outlets</span>`);
+  const sel = state.selected.has(a.i);
+  return `<article class="${sel ? "sel" : ""}" data-i="${a.i}">
+    <input type="checkbox" ${sel ? "checked" : ""} aria-label="Select for bulletin">
+    <div><h4><a href="${esc(safeUrl(a.link))}" target="_blank" rel="noopener noreferrer">${esc(a.title)}</a></h4>
+    <div class="meta">${esc(a.source)} · ${fmtDate(a.date)}${a.also_reported_by.length ? " · also: " + esc(a.also_reported_by.join(", ")) : ""}</div>
+    ${a.summary ? `<p class="summary">${esc(a.summary)}</p>` : ""}
+    ${tags.length ? `<div class="tags">${tags.join("")}</div>` : ""}</div></article>`;
+}
+
+function draw() {
+  const list = visible(), mode = $("group").value;
+  $("count").textContent = `${list.length} shown · ${state.selected.size} selected`;
+  $("copy").disabled = $("download").disabled = !state.selected.size;
+  if (!list.length) { $("list").innerHTML = '<p class="empty">No articles match these filters.</p>'; return; }
+  const groups = new Map();
+  list.forEach(a => groupKey(a, mode).forEach(k => { if (!groups.has(k)) groups.set(k, []); groups.get(k).push(a); }));
+  let keys = [...groups.keys()];
+  const order = groupOrder(mode);
+  if (order) keys.sort((x, y) => order.indexOf(x) - order.indexOf(y));
+  else if (mode === "date") keys.sort().reverse();
+  else keys.sort();
+  $("list").innerHTML = keys.map(k => (mode === "none" ? "" : `<h2 class="group">${esc(groupLabel(k, mode))} <span>${groups.get(k).length}</span></h2>`)
+    + groups.get(k).map(card).join("")).join("");
+}
+
+$("list").addEventListener("change", (e) => {
+  if (e.target.type !== "checkbox") return;
+  const el = e.target.closest("article"), i = +el.dataset.i;
+  e.target.checked ? state.selected.add(i) : state.selected.delete(i);
+  el.classList.toggle("sel", e.target.checked);
+  save();
+  $("count").textContent = `${visible().length} shown · ${state.selected.size} selected`;
+  $("copy").disabled = $("download").disabled = !state.selected.size;
+});
+$("selAll").addEventListener("click", () => { visible().forEach(a => state.selected.add(a.i)); save(); draw(); });
+$("selNone").addEventListener("click", () => { state.selected.clear(); save(); draw(); });
+
+function markdown() {
+  const chosen = arts.filter(a => state.selected.has(a.i));
+  const byTopic = new Map();
+  chosen.forEach(a => {
+    const k = (state.topics.size && a.topics.find(t => state.topics.has(t))) || a.topics[0];
+    if (!byTopic.has(k)) byTopic.set(k, []); byTopic.get(k).push(a);
+  });
+  const order = DATA.topics.map(t => t.id);
+  const lines = [`# Threat Intelligence Bulletin`, ``, `_Period: ${DATA.period}_`, ``];
+  [...byTopic.keys()].sort((x, y) => order.indexOf(x) - order.indexOf(y)).forEach(k => {
+    lines.push(`## ${topicName[k]}`, ``);
+    byTopic.get(k).forEach(a => {
+      lines.push(`### ${a.title}`);
+      const meta = [`Source: [${a.source}](${a.link})`, fmtDate(a.date)];
+      if (a.also_reported_by.length) meta.push(`also reported by ${a.also_reported_by.join(", ")}`);
+      lines.push(meta.join(" · ") + "  ");
+      if (a.industries.length) lines.push(`Sectors: ${a.industries.map(i => indName[i]).join(", ")}  `);
+      if (a.cves.length) lines.push(`CVEs: ${a.cves.join(", ")}  `);
+      if (a.summary) lines.push(``, a.summary);
+      lines.push(``);
+    });
+  });
+  return lines.join("\n");
+}
+function toast(msg) { const t = $("toast"); t.textContent = msg; t.classList.add("show"); setTimeout(() => t.classList.remove("show"), 1800); }
+$("copy").addEventListener("click", async () => {
+  const md = markdown();
+  try { await navigator.clipboard.writeText(md); toast("Copied " + state.selected.size + " articles"); }
+  catch (e) { const ta = document.createElement("textarea"); ta.value = md; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); ta.remove(); toast("Copied"); }
+});
+$("download").addEventListener("click", () => {
+  const url = URL.createObjectURL(new Blob([markdown()], { type: "text/markdown" }));
+  const a = Object.assign(document.createElement("a"), { href: url, download: `bulletin-${new Date().toISOString().slice(0, 10)}.md` });
+  a.click(); URL.revokeObjectURL(url);
+});
+draw();
+</script>
+</body>
+</html>

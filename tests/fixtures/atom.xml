@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Example Research Blog</title>
+  <entry>
+    <title type="html">Hackers exploit critical Ivanti zero-day to breach hospitals</title>
+    <link rel="replies" href="https://research.example.org/comments/1"/>
+    <link rel="alternate" href="https://research.example.org/ivanti"/>
+    <published>2026-10-05T18:00:00.123456Z</published>
+    <summary>Same story, different outlet. CVE-2026-1234 again.</summary>
+  </entry>
+  <entry>
+    <title>LockBit affiliate deploys new ransomware-as-a-service encryptor against manufacturers</title>
+    <link href="https://research.example.org/lockbit"/>
+    <updated>2026-10-04T08:15:00+02:00</updated>
+    <category term="Ransomware"/>
+    <content type="html">&lt;p&gt;The manufacturing sector and an automotive supplier were hit.&lt;/p&gt;</content>
+  </entry>
+</feed>

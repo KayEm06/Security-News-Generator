@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:dc="http://purl.org/dc/elements/1.1/">
+<channel>
+  <title>Example Security News</title>
+  <item>
+    <title>Hackers exploit critical Ivanti zero-day (CVE-2026-1234) to breach hospitals</title>
+    <link>https://news.example.com/ivanti-zero-day?utm_source=rss&amp;utm_medium=feed</link>
+    <pubDate>Mon, 05 Oct 2026 14:30:00 +0000</pubDate>
+    <category>Vulnerability</category>
+    <description><![CDATA[<p>Attackers are exploiting <b>CVE-2026-1234</b> and cve-2026-56789 in Ivanti Connect Secure to gain access to healthcare networks.</p><script>alert(1)</script>]]></description>
+  </item>
+  <item>
+    <title>Police arrest members of pig butchering crypto scam ring</title>
+    <link>https://news.example.com/pig-butchering-arrests</link>
+    <dc:date>2026-10-03T09:00:00Z</dc:date>
+    <content:encoded><![CDATA[<p>Europol says the fraud gang laundered millions through crypto exchanges and banks.</p>]]></content:encoded>
+  </item>
+  <item>
+    <title>Weekly podcast episode 300</title>
+    <link>https://news.example.com/podcast-300</link>
+    <pubDate>Tue, 01 Sep 2026 10:00:00 GMT</pubDate>
+    <description>Old news that should fall outside the window.</description>
+  </item>
+</channel>
+</rss>

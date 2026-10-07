@@ -1,0 +1,37 @@
+{
+  "_comment": "Feeds pulled by secnews. Add/remove entries freely. 'type' groups sources (news, vendor-research, government, blog). 'categories' are topic ids (see categories.json) applied to every article from that source in addition to keyword matches. Set 'enabled': false to skip a feed.",
+  "sources": [
+    {"name": "The Hacker News", "url": "https://feeds.feedburner.com/TheHackersNews", "type": "news"},
+    {"name": "BleepingComputer", "url": "https://www.bleepingcomputer.com/feed/", "type": "news"},
+    {"name": "Krebs on Security", "url": "https://krebsonsecurity.com/feed/", "type": "news", "categories": ["fraud-cybercrime"]},
+    {"name": "Dark Reading", "url": "https://www.darkreading.com/rss.xml", "type": "news"},
+    {"name": "SecurityWeek", "url": "https://www.securityweek.com/feed/", "type": "news"},
+    {"name": "The Record", "url": "https://therecord.media/feed", "type": "news"},
+    {"name": "CyberScoop", "url": "https://cyberscoop.com/feed/", "type": "news"},
+    {"name": "Infosecurity Magazine", "url": "https://www.infosecurity-magazine.com/rss/news/", "type": "news"},
+    {"name": "Help Net Security", "url": "https://www.helpnetsecurity.com/feed/", "type": "news"},
+    {"name": "Security Affairs", "url": "https://securityaffairs.com/feed", "type": "news"},
+    {"name": "The Register (Security)", "url": "https://www.theregister.com/security/headlines.atom", "type": "news"},
+    {"name": "Ars Technica (Security)", "url": "https://feeds.arstechnica.com/arstechnica/security", "type": "news"},
+    {"name": "Wired (Security)", "url": "https://www.wired.com/feed/category/security/latest/rss", "type": "news"},
+    {"name": "Graham Cluley", "url": "https://grahamcluley.com/feed/", "type": "news"},
+    {"name": "DataBreaches.net", "url": "https://databreaches.net/feed/", "type": "news", "categories": ["data-breaches"]},
+    {"name": "Schneier on Security", "url": "https://www.schneier.com/feed/atom/", "type": "blog"},
+    {"name": "SANS Internet Storm Center", "url": "https://isc.sans.edu/rssfeed_full.xml", "type": "blog"},
+
+    {"name": "CISA Advisories", "url": "https://www.cisa.gov/cybersecurity-advisories/all.xml", "type": "government", "categories": ["vulnerabilities"]},
+    {"name": "NCSC UK", "url": "https://www.ncsc.gov.uk/api/1/services/v1/all-rss-feed.xml", "type": "government"},
+
+    {"name": "Microsoft Security Blog", "url": "https://www.microsoft.com/en-us/security/blog/feed/", "type": "vendor-research"},
+    {"name": "Google Threat Intelligence", "url": "https://cloud.google.com/blog/topics/threat-intelligence/rss/", "type": "vendor-research"},
+    {"name": "Cisco Talos", "url": "https://blog.talosintelligence.com/rss/", "type": "vendor-research"},
+    {"name": "Palo Alto Unit 42", "url": "https://unit42.paloaltonetworks.com/feed/", "type": "vendor-research"},
+    {"name": "Check Point Research", "url": "https://research.checkpoint.com/feed/", "type": "vendor-research"},
+    {"name": "Sophos News", "url": "https://news.sophos.com/en-us/feed/", "type": "vendor-research"},
+    {"name": "Kaspersky Securelist", "url": "https://securelist.com/feed/", "type": "vendor-research"},
+    {"name": "ESET WeLiveSecurity", "url": "https://feeds.feedburner.com/eset/blog", "type": "vendor-research"},
+    {"name": "Malwarebytes Labs", "url": "https://www.malwarebytes.com/blog/feed/index.xml", "type": "vendor-research"},
+    {"name": "Rapid7", "url": "https://www.rapid7.com/blog/rss/", "type": "vendor-research"},
+    {"name": "Zero Day Initiative", "url": "https://www.zerodayinitiative.com/blog?format=rss", "type": "vendor-research", "categories": ["vulnerabilities"]}
+  ]
+}
