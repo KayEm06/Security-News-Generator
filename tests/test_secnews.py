@@ -116,6 +116,29 @@ class ParsingTests(unittest.TestCase):
                          "files. The vendor has released fixes and urges customers to upgrade immediately, according to the advisory.")
         self.assertEqual(page_description('<head><meta name="description" content="Only this."></head><body></body>'), "Only this.")
 
+    def test_backfill_older_pages(self):
+        from unittest import mock
+
+        def feed(*ids):
+            items = "".join(f"<item><title>Story {i}</title><link>https://w.example/{i}</link></item>" for i in ids)
+            return f"<rss><channel>{items}</channel></rss>".encode()
+
+        pages = {"https://w.example/feed/": feed(1, 2), "https://w.example/feed/?paged=2": feed(3, 4),
+                 "https://w.example/feed/?paged=3": feed(5)}
+
+        def fake_download(url, timeout, **kw):
+            if url not in pages:
+                raise OSError("404")
+            return pages[url]
+
+        with mock.patch("secnews.feeds._download", fake_download):
+            r = fetch_source(Source("WP", "https://w.example/feed/"), backfill=5)  # stops at the 404 on page 4
+            self.assertEqual([a.title for a in r.articles], [f"Story {i}" for i in range(1, 6)])
+            self.assertEqual(len(fetch_source(Source("WP", "https://w.example/feed/")).articles), 2)  # default: no paging
+        # A feed that ignores ?paged= returns page 1 again; we stop instead of looping.
+        with mock.patch("secnews.feeds._download", lambda url, timeout, **kw: feed(1, 2)):
+            self.assertEqual(len(fetch_source(Source("X", "https://x.example/rss"), backfill=5).articles), 2)
+
     def test_html_page_reports_error(self):
         r = fetch_source(Source("Blocked", (FIX / "blocked.html").as_uri()))
         self.assertEqual(r.articles, [])
@@ -165,6 +188,21 @@ class ClassifierTests(unittest.TestCase):
     def test_source_forced_location(self):
         c = Classifier(TAX, [Source("NCSC", "x", locations=["uk-ireland"])])
         self.assertEqual(c.classify(Article(title="New guidance", link="https://x", source="NCSC")).locations, ["uk-ireland"])
+
+    def test_plurals_and_phrases(self):
+        self.assertIn("energy", tagged("Cyberattack on Polish power plants").industries)  # plural
+        self.assertIn("energy", tagged("Hackers breach Israeli water facilities").industries)  # y -> ies
+        self.assertIn("government", tagged("Spies target ministries across Asia").industries)
+        # a specific phrase in the summary is enough on its own; a lone generic word isn't
+        self.assertIn("energy", tagged("Ransomware hits Halliburton", "Operations at the energy company were disrupted.").industries)
+        self.assertEqual(tagged("Patch now", "It affects energy use of laptops.").industries, [])
+        # noisy words that used to tag Energy
+        self.assertNotIn("energy", tagged("Malicious package found in CI pipeline").industries)
+        self.assertNotIn("energy", tagged("Crypto drainer abuses fake gas fee prompts").industries)
+
+    def test_publisher_tags_count_strongly(self):
+        a = Classifier(TAX).classify(Article(title="Weekly roundup", link="x", source="T", feed_tags=["Healthcare"]))
+        self.assertIn("healthcare", a.industries)
 
     def test_unmatched_is_general(self):
         self.assertEqual(tagged("Weekly podcast episode").topics, ["general"])

@@ -34,6 +34,12 @@ Optionally install it as a `secnews` command: `pip install .` (or `pipx install 
 ### Going back further: the archive
 
 News feeds only carry each site's latest items, often just the last few days for busy sites. So every `fetch` also saves what it found to an archive (`~/.secnews/archive.json`) and merges earlier runs back in. Run it at least weekly and history builds up, so you can look back weeks even for quiet industries. The archive keeps 90 days by default (`--keep-days`). Use `--archive PATH` to store it elsewhere, for example a shared drive, or `--no-archive` to skip it. Pictures and summaries looked up from article pages are stored too, so they aren't fetched again.
+
+To fill in history straight away rather than waiting for it to build up, add `--backfill 5` to a run. The tool then also fetches up to 5 older pages from each feed that supports paging; most of the WordPress-based sources do, and the others are skipped automatically. Once the archive has some history, normal runs are enough.
+
+```bash
+python3 -m secnews fetch --backfill 5 -o reports/digest.html
+```
 3. **Or slice it from the command line:**
    ```bash
    # Vulnerabilities + ransomware only, as Markdown
@@ -87,7 +93,7 @@ Filters are combined with AND across types (category **and** industry **and** lo
 
 **Locations:** UK & Ireland, Europe, North America, Latin America & Caribbean, Asia-Pacific, Middle East & North Africa, Sub-Saharan Africa, Russia & Central Asia. Each region is matched on country names, nationalities, major cities and national agencies (e.g. NCSC, ICO and Action Fraud count as UK). Articles from CISA are always tagged North America and articles from NCSC UK are always tagged UK & Ireland. Location tags record the places an article *mentions*. That usually means where the victims are, but a story about Russian or Chinese hackers will also be tagged with that region.
 
-Tagging is keyword-based. Keywords are matched as whole words or phrases; a match in the title scores 2 and a match in the summary scores 1. Topics need a score of 1, while industries and locations need 2, so they require a title mention or two summary mentions. An article can carry several tags. Its *primary* category, which decides where it appears in the Markdown digest, is the highest-scoring one.
+Tagging is keyword-based. Keywords are matched as whole words or phrases, including plurals ("power plant" also matches "power plants", "facility" matches "facilities"). A match scores 2 if it's in the title, in the publisher's own tags, or is a multi-word phrase in the summary; a single word in the summary scores 1. Topics need a score of 1, while industries and locations need 2. So an industry is tagged when the title mentions it, the summary contains a specific phrase like "energy company", or the summary mentions two of its keywords. An article can carry several tags. Its *primary* category, which decides where it appears in the Markdown digest, is the highest-scoring one.
 
 ## Customising
 

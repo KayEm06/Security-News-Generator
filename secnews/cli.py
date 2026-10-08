@@ -69,6 +69,9 @@ def build_parser() -> argparse.ArgumentParser:
     out.add_argument("--keep-days", type=int, default=DEFAULT_KEEP_DAYS,
                      help=f"how long the archive keeps articles (default: {DEFAULT_KEEP_DAYS})")
     out.add_argument("--no-archive", action="store_true", help="don't read or update the archive")
+    out.add_argument("--backfill", type=int, default=0, metavar="PAGES",
+                     help="also fetch up to PAGES older pages of each feed that supports it, to fill in history "
+                          "(e.g. 5 on a first run; default: 0)")
     out.add_argument("--workers", type=int, default=10, help="parallel downloads (default: 10)")
     out.add_argument("--timeout", type=float, default=20, help="per-feed timeout in seconds (default: 20)")
     out.add_argument("-q", "--quiet", action="store_true", help="suppress progress output")
@@ -111,8 +114,9 @@ def cmd_fetch(args) -> int:
         _log(args, f"Loaded {len(articles)} articles from {args.input}")
     else:
         active = [s for s in sources if s.enabled]
-        _log(args, f"Fetching {len(active)} feeds…")
-        results = fetch_all(active, workers=args.workers, timeout=args.timeout)
+        extra = f" (plus up to {args.backfill} older pages each)" if args.backfill else ""
+        _log(args, f"Fetching {len(active)} feeds{extra}…")
+        results = fetch_all(active, workers=args.workers, timeout=args.timeout, backfill=max(0, args.backfill))
         articles = []
         for r in results:
             if r.error:

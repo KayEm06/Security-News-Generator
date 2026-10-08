@@ -8,7 +8,7 @@ import html.entities
 import re
 import urllib.request
 import zlib
-from urllib.parse import urljoin
+from urllib.parse import parse_qsl, urlencode, urljoin, urlsplit, urlunsplit
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -421,23 +421,46 @@ def _download(url: str, timeout: float, accept: str = FEED_ACCEPT, max_bytes: in
     return data
 
 
-def fetch_source(source: Source, timeout: float = 20.0) -> FetchResult:
+def _page_url(url: str, page: int) -> str:
+    """Older page of a feed. WordPress (and many other CMSs) accept ?paged=N; others ignore it."""
+    parts = urlsplit(url)
+    query = [(k, v) for k, v in parse_qsl(parts.query, keep_blank_values=True) if k != "paged"] + [("paged", str(page))]
+    return urlunsplit(parts._replace(query=urlencode(query)))
+
+
+def _fetch_feed(url: str, source: Source, timeout: float) -> list[Article]:
+    data = _download(url, timeout)
+    if data.lstrip()[:15].lower().startswith((b"<!doctype html", b"<html")):
+        raise ValueError("received an HTML page instead of a feed (blocked or URL changed)")
+    return parse_feed(data, source)
+
+
+def fetch_source(source: Source, timeout: float = 20.0, backfill: int = 0) -> FetchResult:
+    """Fetch a feed, plus up to ``backfill`` older pages where the feed supports paging."""
     try:
-        data = _download(source.url, timeout)
-        if data.lstrip()[:15].lower().startswith((b"<!doctype html", b"<html")):
-            raise ValueError("received an HTML page instead of a feed (blocked or URL changed)")
-        return FetchResult(source, parse_feed(data, source))
+        articles = _fetch_feed(source.url, source, timeout)
     except Exception as exc:  # report per-source failures without aborting the run
         msg = str(exc) or exc.__class__.__name__
         return FetchResult(source, [], error=f"{exc.__class__.__name__}: {msg}"[:300])
+    seen = {a.link for a in articles}
+    for page in range(2, backfill + 2):
+        try:
+            older = [a for a in _fetch_feed(_page_url(source.url, page), source, timeout) if a.link not in seen]
+        except Exception:  # paging unsupported or past the end: keep what we have
+            break
+        if not older:  # feed ignored ?paged= and returned page 1 again, or there's nothing older
+            break
+        seen.update(a.link for a in older)
+        articles += older
+    return FetchResult(source, articles)
 
 
-def fetch_all(sources: list[Source], workers: int = 10, timeout: float = 20.0) -> list[FetchResult]:
+def fetch_all(sources: list[Source], workers: int = 10, timeout: float = 20.0, backfill: int = 0) -> list[FetchResult]:
     sources = [s for s in sources if s.enabled]
     if not sources:
         return []
     with ThreadPoolExecutor(max_workers=max(1, min(workers, len(sources)))) as pool:
-        return list(pool.map(lambda s: fetch_source(s, timeout), sources))
+        return list(pool.map(lambda s: fetch_source(s, timeout, backfill), sources))
 
 
 def needs_page_lookup(article: Article) -> bool:

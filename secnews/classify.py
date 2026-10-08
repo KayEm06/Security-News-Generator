@@ -17,13 +17,26 @@ _STOPWORDS = set(
 )
 
 
-def _compile(keywords: list[str]) -> list[tuple[str, re.Pattern]]:
+def _compile(keywords: list[str]) -> list[tuple[str, re.Pattern, bool]]:
+    """(keyword, pattern, is_phrase) per keyword.
+
+    Whole word/phrase, tolerant of hyphen vs. space and of a plural ending ("power plant" also matches
+    "power plants"). Short acronyms (all caps, <=4 chars) are case-sensitive and matched exactly.
+    """
     pats = []
     for kw in keywords:
-        # Whole word/phrase, tolerant of hyphen vs. space; short acronyms (all caps, <=4 chars) are case-sensitive.
-        body = r"[\s\-]+".join(re.escape(p) for p in re.split(r"[\s\-]+", kw.strip()))
-        flags = 0 if (kw.isupper() and len(kw) <= 4) else re.IGNORECASE
-        pats.append((kw, re.compile(rf"(?<!\w){body}(?!\w)", flags)))
+        words = re.split(r"[\s\-]+", kw.strip())
+        acronym = kw.isupper() and len(kw) <= 4
+        last = words[-1]
+        if acronym or not last[-1:].isalpha() or last.endswith("s"):
+            tail = re.escape(last)
+        elif re.search(r"[^aeiou]y$", last, re.IGNORECASE):  # facility -> facilities
+            tail = re.escape(last[:-1]) + "(?:y|ies)"
+        else:
+            tail = re.escape(last) + "(?:s|es)?"
+        body = r"[\s\-]+".join([re.escape(p) for p in words[:-1]] + [tail])
+        flags = 0 if acronym else re.IGNORECASE
+        pats.append((kw, re.compile(rf"(?<!\w){body}(?!\w)", flags), len(words) > 1))
     return pats
 
 
@@ -37,35 +50,36 @@ class Classifier:
         self._source_locations = {s.name: s.locations for s in (sources or [])}
 
     @staticmethod
-    def _score(rules, title: str, body: str, min_score: int) -> list[str]:
+    def _score(rules, title: str, body: str, tags: str, min_score: int) -> list[str]:
+        """Title hits, the publisher's own tags and multi-word phrases are strong (2); a lone word in the body is 1."""
         scored = []
         for cat, pats in rules:
             score = 0
-            for _, p in pats:
-                if p.search(title):
+            for _, p, phrase in pats:
+                if p.search(title) or p.search(tags):
                     score += 2
                 elif p.search(body):
-                    score += 1
+                    score += 2 if phrase else 1
             if score >= min_score:
                 scored.append((score, cat.id))
         scored.sort(key=lambda x: -x[0])  # stable: ties keep config order
         return [cid for _, cid in scored]
 
     def classify(self, art: Article) -> Article:
-        body = f"{art.summary} {' '.join(art.feed_tags)}"
+        body, tags = art.summary, " | ".join(art.feed_tags)
         t = self.taxonomy
-        topics = self._score(self._topics, art.title, body, t.topic_min_score)
+        topics = self._score(self._topics, art.title, body, tags, t.topic_min_score)
         for forced in self._source_topics.get(art.source, []):
             if forced not in topics:
                 topics.append(forced)
         art.topics = topics or ["general"]
-        art.industries = self._score(self._industries, art.title, body, t.industry_min_score)
-        locations = self._score(self._locations, art.title, body, t.location_min_score)
+        art.industries = self._score(self._industries, art.title, body, tags, t.industry_min_score)
+        locations = self._score(self._locations, art.title, body, tags, t.location_min_score)
         for forced in self._source_locations.get(art.source, []):
             if forced not in locations:
                 locations.append(forced)
         art.locations = locations
-        art.cves = sorted({m.upper() for m in CVE_RE.findall(f"{art.title} {body}")})
+        art.cves = sorted({m.upper() for m in CVE_RE.findall(f"{art.title} {body} {tags}")})
         return art
 
 
