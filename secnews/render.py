@@ -138,7 +138,7 @@ def to_html(articles: list[Article], taxonomy: Taxonomy, meta: dict) -> str:
         + [{"id": "general", "name": "General", "color": "#94a3b8"}],
         "industries": [{"id": i.id, "name": i.name} for i in taxonomy.industries],
         "locations": [{"id": l.id, "name": l.name} for l in taxonomy.locations],
-        "errors": meta.get("errors", {}),
+        "site": {k: meta.get("site", {}).get(k, "") for k in ("subscribe_url", "subscribe_email", "briefing_title")},
         "articles": [a.to_dict() for a in articles],
     }
     blob = json.dumps(data, ensure_ascii=False).replace("</", "<\\/")

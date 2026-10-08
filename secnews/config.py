@@ -7,6 +7,13 @@ from pathlib import Path
 DATA_DIR = Path(__file__).parent / "data"
 DEFAULT_SOURCES = DATA_DIR / "sources.json"
 DEFAULT_CATEGORIES = DATA_DIR / "categories.json"
+DEFAULT_SITE = DATA_DIR / "site.json"
+
+
+def load_site(path: Path | str | None = None) -> dict:
+    """Page/briefing settings; keys starting with '_' are comments."""
+    data = json.loads(Path(path or DEFAULT_SITE).read_text(encoding="utf-8"))
+    return {k: v for k, v in data.items() if not k.startswith("_")}
 
 
 @dataclass
@@ -15,8 +22,11 @@ class Source:
     url: str
     type: str = "news"
     categories: list[str] = field(default_factory=list)
+    industries: list[str] = field(default_factory=list)
     locations: list[str] = field(default_factory=list)
+    format: str = "feed"  # "feed" (RSS/Atom) or "cisa-kev" (CISA Known Exploited Vulnerabilities JSON)
     enabled: bool = True
+    note: str = ""
 
 
 @dataclass

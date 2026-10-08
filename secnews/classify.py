@@ -48,6 +48,7 @@ class Classifier:
         self._locations = [(c, _compile(c.keywords)) for c in taxonomy.locations]
         self._source_topics = {s.name: s.categories for s in (sources or [])}
         self._source_locations = {s.name: s.locations for s in (sources or [])}
+        self._source_industries = {s.name: s.industries for s in (sources or [])}
 
     @staticmethod
     def _score(rules, title: str, body: str, tags: str, min_score: int) -> list[str]:
@@ -73,7 +74,11 @@ class Classifier:
             if forced not in topics:
                 topics.append(forced)
         art.topics = topics or ["general"]
-        art.industries = self._score(self._industries, art.title, body, tags, t.industry_min_score)
+        industries = self._score(self._industries, art.title, body, tags, t.industry_min_score)
+        for forced in self._source_industries.get(art.source, []):
+            if forced not in industries:
+                industries.append(forced)
+        art.industries = industries
         locations = self._score(self._locations, art.title, body, tags, t.location_min_score)
         for forced in self._source_locations.get(art.source, []):
             if forced not in locations:
@@ -115,6 +120,8 @@ def deduplicate(articles: list[Article], similarity: float = 0.7) -> list[Articl
         match = None
         if len(toks) >= 4:
             for other_toks, other in token_index:
+                if art.cves and other.cves and not set(art.cves) & set(other.cves):
+                    continue  # similar wording but different vulnerabilities: separate stories
                 inter = len(toks & other_toks)
                 if inter and inter / len(toks | other_toks) >= similarity:
                     match = other

@@ -1,9 +1,22 @@
 # Security-News-Generator (`secnews`)
 
-Pulls the latest cybersecurity news from ~30 sources, tags each article by **topic** (vulnerabilities, ransomware, fraud & cybercrime, …), **industry** (healthcare, finance, charities, …) and **location** (UK & Ireland, Europe, North America, …), and produces a digest you can filter and turn into a weekly threat intelligence bulletin.
+Pulls the latest cybersecurity news from about 70 sources, tags each article by **topic** (vulnerabilities, ransomware, fraud & cybercrime, …), **industry** (healthcare, finance, charities, …) and **location** (UK & Ireland, Europe, North America, …), and builds a security news site you can browse, search and filter, plus a daily briefing email.
 
 - **Pure Python standard library**: Python 3.9+, nothing to install.
-- **Sources:** news outlets (BleepingComputer, The Hacker News, The Record, Krebs, SecurityWeek, Dark Reading…), vendor research (Talos, Unit 42, Microsoft, Google TI, Check Point, Sophos, ESET…), government (CISA, NCSC UK) and blogs (SANS ISC, Schneier).
+- **Sources:**
+  - news outlets (BleepingComputer, The Hacker News, The Record, Krebs, SecurityWeek, Dark Reading, CSO Online, TechCrunch…)
+  - vendor research (Talos, Unit 42, Microsoft, Google TI, Check Point, Sophos, ESET…)
+  - government (CISA advisories, CISA ICS advisories, CISA's Known Exploited Vulnerabilities catalogue, NCSC UK)
+  - specialist outlets for exploits (Exploit-DB, Full Disclosure, Project Zero, watchTowr), threat research (SentinelOne Labs, Huntress, Red Canary, The DFIR Report, Citizen Lab), ICS/OT (Dragos), cloud (Wiz, AWS, Datadog), supply chain (Socket), AI security, breaches (Troy Hunt, Have I Been Pwned), healthcare (HIPAA Journal) and crypto fraud (Chainalysis)
+- **The site:**
+  - "Search articles" box
+  - a section for Latest and each category
+  - a LIVE strip with the newest stories
+  - a front page with the lead story, a Latest column, category blocks, More stories and "Load more stories"
+  - saved stories
+  - CVE Watch
+  - a daily briefing sign-up
+  - filters for industry, location, source and time
 - **Filters:** category, industry, location, source, source type, date range, free text, CVE-only.
 - **Extras:** shows each article's picture and a proper summary (taken from the feed, or from the article page when the feed has no picture or only a one-liner), extracts CVE IDs, merges the same story when several outlets cover it ("3 outlets"), and reports feeds that fail without stopping the run.
 - **Outputs:** interactive HTML, Markdown, JSON, CSV.
@@ -13,11 +26,46 @@ Pulls the latest cybersecurity news from ~30 sources, tags each article by **top
 ```bash
 git clone https://github.com/kayem06/security-news-generator && cd security-news-generator
 
-# Last 7 days, everything, as an interactive page
+# Build the news site (last 30 days) and open reports/digest.html in your browser
 python3 -m secnews fetch -o reports/digest.html
 ```
 
 Optionally install it as a `secnews` command: `pip install .` (or `pipx install .`).
+
+## Using the site
+
+- **Sections:** the navy bar has Latest plus one section per category. **Saved** and **CVE Watch** sit on the right.
+- **Search articles** (top right) searches titles, summaries, sources and CVE IDs. Press Esc to clear it.
+- **LIVE** cycles through the five newest stories. Hover to pause it.
+- **Save** on any story keeps it in your browser's Saved section. Saved stories stay there when you build next week's report, as long as you open it in the same browser.
+- **CVE Watch:** add a CVE ID (`CVE-2026-1281`) or a product or vendor name (`Fortinet`). Matching stories are flagged "Watching", the CVE Watch section lists them, and the nav shows how many are new since you last looked. **Trending CVEs** lists the most-reported CVEs, each with a one-click Watch button.
+- **Refine stories** (right-hand column) filters every section by industry, location, source, time period, or CVE mentions only.
+
+## Daily briefing email
+
+`secnews briefing` builds an email of the day's top stories (most widely reported first) from the last 24 hours.
+
+```bash
+python3 -m secnews briefing -o briefing.html      # preview in a browser
+python3 -m secnews subscribers add jo@example.com  # manage the list (~/.secnews/subscribers.txt)
+python3 -m secnews briefing --send                 # email everyone on the list
+```
+
+Sending uses your organisation's email server or any SMTP service. Set these environment variables:
+
+| Variable | Example |
+|---|---|
+| `SECNEWS_SMTP_HOST` | `smtp.office365.com` |
+| `SECNEWS_SMTP_PORT` | `587` (default) |
+| `SECNEWS_SMTP_USER` / `SECNEWS_SMTP_PASSWORD` | the sending mailbox and its password or app password |
+| `SECNEWS_SMTP_FROM` | `security-news@yourorg.com` (defaults to the user) |
+| `SECNEWS_SMTP_SECURITY` | `starttls` (default), `ssl` or `none` |
+
+Each subscriber gets their own copy, so nobody sees the list. To send it every morning, schedule `python3 -m secnews briefing --send` with cron (macOS/Linux) or Task Scheduler (Windows).
+
+**The sign-up box on the site.** A page opened from your computer can't store a mailing list itself, so set one of these in `secnews/data/site.json`:
+- `subscribe_email`: your own address. The box opens a pre-filled email to you, and you add the person with `secnews subscribers add`.
+- `subscribe_url`: a newsletter service's sign-up endpoint that accepts a posted `email` field, such as Buttondown, Mailchimp, Formspree or a Microsoft/Google Form. Use this if you'd rather a service manage the list and send the emails.
 
 ## Weekly bulletin workflow
 
@@ -29,7 +77,7 @@ Optionally install it as a `secnews` command: `pip install .` (or `pipx install 
    ```bash
    python3 -m secnews fetch --input reports/2026-W41.json -o reports/2026-W41.html
    ```
-   Click category, industry, location, source and time period filters, or search for actors or products. The page opens on the last 7 days. If a filter finds nothing in that period, the page tells you when the most recent matching article was and offers a button to widen the period.
+   Browse the sections, search for actors or products, or narrow things down with **Refine stories**. Stories are shown newest first, with **Load more stories** at the bottom. If a time period filter finds nothing, the page tells you when the most recent matching story was and offers a button to widen the period.
 
 ### Going back further: the archive
 
@@ -63,6 +111,8 @@ python3 -m secnews fetch --backfill 5 -o reports/digest.html
 | Command | What it does |
 |---|---|
 | `secnews fetch` | Fetch (or `--input` a saved JSON), tag, filter, write a report. See `secnews fetch -h`. |
+| `secnews briefing` | Build the daily briefing email; `--send` emails it. See `secnews briefing -h`. |
+| `secnews subscribers list\|add\|remove` | Manage the briefing's subscriber list. |
 | `secnews categories` | List topic and industry ids you can filter on. |
 | `secnews sources` | List configured feeds. Add `--check` to test every feed and show item counts. |
 
@@ -99,7 +149,8 @@ Tagging is keyword-based. Keywords are matched as whole words or phrases, includ
 
 Both config files are plain JSON. Edit them in place (`secnews/data/`) or pass your own copies with `--sources-file` / `--categories-file`.
 
-- **`sources.json`**: add a feed with `{"name": "...", "url": "https://.../feed", "type": "news"}`. Add `"categories": ["vulnerabilities"]` or `"locations": ["uk-ireland"]` to tag every article from that source, or `"enabled": false` to pause it. RSS 2.0, RSS 1.0/RDF and Atom are all supported.
+- **`sources.json`**: add a feed with `{"name": "...", "url": "https://.../feed", "type": "news"}`. Add `"categories": ["vulnerabilities"]`, `"industries": ["healthcare"]` or `"locations": ["uk-ireland"]` to tag every article from that source, or `"enabled": false` to pause it. RSS 2.0, RSS 1.0/RDF and Atom are all supported, plus CISA's KEV JSON (`"format": "cisa-kev"`). Source types are `news`, `specialist`, `vendor-research`, `government` and `blog`. Ransomware.live, which lists every leak-site victim, is included but switched off because it's very high volume.
+- **`site.json`**: daily briefing sign-up settings, the email's title, and how many stories it includes.
 - **`categories.json`**: add keywords, new topics, industries or locations. For example, to filter by a single country, add a location entry with just that country's keywords. Each topic's `"color"` (a hex code such as `"#166534"`) sets its colour in the HTML report. Very dark colours are shown as solid tags with white text. Changes also apply to saved JSON snapshots, because `--input` re-tags articles on every run.
 
 Run `secnews sources --check` after changing feeds; some publishers change feed URLs or block unknown clients from time to time.

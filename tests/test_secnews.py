@@ -9,7 +9,7 @@ from pathlib import Path
 from secnews.classify import Classifier, deduplicate, filter_articles, normalize_url, resolve_ids
 from secnews.cli import main
 from secnews.config import Source, load_sources, load_taxonomy
-from secnews.feeds import fetch_source, page_description, page_image, parse_date, parse_feed
+from secnews.feeds import fetch_source, needs_page_lookup, page_description, page_image, parse_date, parse_feed
 from secnews.models import Article
 
 FIX = Path(__file__).parent / "fixtures"
@@ -139,6 +139,28 @@ class ParsingTests(unittest.TestCase):
         with mock.patch("secnews.feeds._download", lambda url, timeout, **kw: feed(1, 2)):
             self.assertEqual(len(fetch_source(Source("X", "https://x.example/rss"), backfill=5).articles), 2)
 
+    def test_cisa_kev(self):
+        from secnews.feeds import parse_kev
+        recent = (datetime.now(timezone.utc) - timedelta(days=3)).strftime("%Y-%m-%d")
+        data = json.dumps({"vulnerabilities": [
+            {"cveID": "CVE-2026-1281", "vendorProject": "Ivanti", "product": "Connect Secure", "dateAdded": recent,
+             "vulnerabilityName": "Ivanti Connect Secure Authentication Bypass", "shortDescription": "An auth bypass.",
+             "requiredAction": "Apply mitigations.", "dueDate": "2026-10-29", "knownRansomwareCampaignUse": "Known"},
+            {"cveID": "CVE-2021-44228", "vendorProject": "Apache", "product": "Log4j2", "dateAdded": "2021-12-10",
+             "vulnerabilityName": "Log4Shell", "shortDescription": "Old entry."},
+        ]}).encode()
+        src = Source("CISA KEV", "x", format="cisa-kev", categories=["vulnerabilities"])
+        arts = parse_kev(data, src)
+        self.assertEqual(len(arts), 1)  # the 2021 entry is too old to be news
+        a = Classifier(TAX, [src]).classify(arts[0])
+        self.assertIn("CVE-2026-1281", a.title)
+        self.assertEqual(a.link, "https://nvd.nist.gov/vuln/detail/CVE-2026-1281")
+        self.assertIn("Known to be used in ransomware", a.summary)
+        self.assertEqual(a.cves, ["CVE-2026-1281"])
+        self.assertIn("vulnerabilities", a.topics)
+        self.assertIn("ransomware", a.topics)
+        self.assertFalse(needs_page_lookup(a))
+
     def test_html_page_reports_error(self):
         r = fetch_source(Source("Blocked", (FIX / "blocked.html").as_uri()))
         self.assertEqual(r.articles, [])
@@ -200,6 +222,10 @@ class ClassifierTests(unittest.TestCase):
         self.assertNotIn("energy", tagged("Malicious package found in CI pipeline").industries)
         self.assertNotIn("energy", tagged("Crypto drainer abuses fake gas fee prompts").industries)
 
+    def test_source_forced_industry(self):
+        c = Classifier(TAX, [Source("HIPAA Journal", "x", industries=["healthcare"])])
+        self.assertEqual(c.classify(Article(title="Weekly roundup", link="x", source="HIPAA Journal")).industries, ["healthcare"])
+
     def test_publisher_tags_count_strongly(self):
         a = Classifier(TAX).classify(Article(title="Weekly roundup", link="x", source="T", feed_tags=["Healthcare"]))
         self.assertIn("healthcare", a.industries)
@@ -231,6 +257,14 @@ class DedupFilterTests(unittest.TestCase):
         self.assertEqual(ivanti.also_reported_by, ["Outlet B"])
         self.assertEqual(ivanti.cves, ["CVE-2026-1234", "CVE-2026-56789"])
 
+    def test_similar_titles_with_different_cves_stay_separate(self):
+        now = datetime.now(timezone.utc)
+        a = Article(title="CISA adds CVE-2026-1111 to Known Exploited Vulnerabilities: Ivanti Connect Secure flaw",
+                    link="https://n/1", source="CISA", published=now, cves=["CVE-2026-1111"])
+        b = Article(title="CISA adds CVE-2026-2222 to Known Exploited Vulnerabilities: Ivanti Connect Secure flaw",
+                    link="https://n/2", source="CISA", published=now, cves=["CVE-2026-2222"])
+        self.assertEqual(len(deduplicate([a, b])), 2)
+
     def test_filters(self):
         arts = [Classifier(TAX).classify(a) for a in parse("rss.xml") + parse("atom.xml", "Lab")]
         since = datetime(2026, 9, 30, tzinfo=timezone.utc)
@@ -255,15 +289,27 @@ class DedupFilterTests(unittest.TestCase):
 class ConfigTests(unittest.TestCase):
     def test_bundled_config_is_consistent(self):
         sources = load_sources()
-        self.assertGreaterEqual(len(sources), 25)
+        self.assertGreaterEqual(len(sources), 60)
+        self.assertEqual(len({s.name for s in sources}), len(sources))
+        self.assertEqual(len({s.url for s in sources}), len(sources))
         topic_ids = {t.id for t in TAX.topics}
+        industry_ids = {i.id for i in TAX.industries}
         location_ids = {l.id for l in TAX.locations}
         for s in sources:
             self.assertTrue(s.url.startswith("https://"), s.name)
+            self.assertIn(s.format, ("feed", "cisa-kev"), s.name)
+            self.assertIn(s.type, ("news", "specialist", "vendor-research", "government", "blog"), s.name)
             self.assertTrue(set(s.categories) <= topic_ids, s.name)
+            self.assertTrue(set(s.industries) <= industry_ids, s.name)
             self.assertTrue(set(s.locations) <= location_ids, s.name)
         all_ids = [c.id for c in TAX.topics + TAX.industries + TAX.locations]
         self.assertEqual(len(all_ids), len(set(all_ids)))
+
+    def test_site_config(self):
+        from secnews.config import load_site
+        site = load_site()
+        self.assertIn("subscribe_url", site)
+        self.assertFalse(any(k.startswith("_") for k in site))
 
 
 class CliTests(unittest.TestCase):
@@ -280,7 +326,7 @@ class CliTests(unittest.TestCase):
 
     def run_cli(self, *args, pages=False, archive=None):
         out, err = io.StringIO(), io.StringIO()
-        if args and args[0] == "fetch":
+        if args and args[0] in ("fetch", "briefing"):
             if not pages:
                 args = (*args, "--no-page-lookup")  # fixture links point at example.com; keep tests offline
             args = (*args, "--archive", str(archive)) if archive else (*args, "--no-archive")
@@ -383,6 +429,64 @@ class CliTests(unittest.TestCase):
         csv_path = self.tmp / "loc.csv"
         self.run_cli(*common, "-o", str(csv_path))
         self.assertIn("locations", csv_path.read_text().splitlines()[0])
+
+    def _recent_feed(self):
+        now = datetime.now(timezone.utc)
+        items = "".join(
+            f"<item><title>{t}</title><link>https://n.example/{i}</link><pubDate>{(now - timedelta(hours=h)).strftime('%a, %d %b %Y %H:%M:%S +0000')}</pubDate>"
+            f"<description>{t} — details of the incident and what defenders should do next.</description></item>"
+            for i, (t, h) in enumerate([("Ransomware hits hospital chain", 2), ("Critical Fortinet flaw CVE-2026-24851 patched", 5),
+                                        ("Old story from last week", 24 * 8)]))
+        feed = self.tmp / "recent.xml"
+        feed.write_text(f"<rss><channel>{items}</channel></rss>")
+        self.sources.write_text(json.dumps({"sources": [{"name": "Wire", "url": feed.as_uri()}]}))
+
+    def test_briefing_preview(self):
+        self._recent_feed()
+        out = self.tmp / "briefing.html"
+        code, _, err = self.run_cli("briefing", "-o", str(out))
+        self.assertEqual(code, 0, err)
+        html = out.read_text()
+        self.assertIn("Ransomware hits hospital chain", html)
+        self.assertIn("CVE-2026-24851", html)
+        self.assertNotIn("Old story from last week", html)  # outside the last 24 hours
+        self.assertIn("Today's top 2 security stories", html)
+
+    def test_briefing_send(self):
+        from unittest import mock
+        self._recent_feed()
+        subs = self.tmp / "subs.txt"
+        self.run_cli("subscribers", "add", "A@Example.com", "b@example.com", "--subscribers", str(subs))
+        env = {"SECNEWS_SMTP_HOST": "smtp.example.com", "SECNEWS_SMTP_FROM": "news@example.com",
+               "SECNEWS_SMTP_USER": "news@example.com", "SECNEWS_SMTP_PASSWORD": "pw"}
+        with mock.patch.dict("os.environ", env), mock.patch("smtplib.SMTP") as smtp:
+            server = smtp.return_value.__enter__.return_value
+            code, _, err = self.run_cli("briefing", "--send", "--subscribers", str(subs))
+        self.assertEqual(code, 0, err)
+        server.starttls.assert_called_once()
+        server.login.assert_called_once_with("news@example.com", "pw")
+        sent = [c.args[0] for c in server.send_message.call_args_list]
+        self.assertEqual([m["To"] for m in sent], ["a@example.com", "b@example.com"])  # one email each, nobody sees the list
+        self.assertIn("Ransomware hits hospital chain", sent[0].get_body(("html",)).get_content())
+        self.assertIn("Sent briefing to 2 of 2", err)
+
+    def test_briefing_send_needs_config(self):
+        from unittest import mock
+        self._recent_feed()
+        with mock.patch.dict("os.environ", {}, clear=True):
+            code, _, err = self.run_cli("briefing", "--send", "--to", "me@example.com")
+        self.assertEqual(code, 2)
+        self.assertIn("SECNEWS_SMTP_HOST", err)
+
+    def test_subscribers(self):
+        subs = self.tmp / "s.txt"
+        self.run_cli("subscribers", "add", "x@example.com", "y@example.com", "--subscribers", str(subs))
+        self.run_cli("subscribers", "add", "x@example.com", "--subscribers", str(subs))  # no duplicates
+        self.run_cli("subscribers", "remove", "y@example.com", "--subscribers", str(subs))
+        self.assertEqual(subs.read_text().split(), ["x@example.com"])
+        code, _, err = self.run_cli("subscribers", "add", "not-an-email", "--subscribers", str(subs))
+        self.assertEqual(code, 2)
+        self.assertIn("not an email", err)
 
     def test_bad_category(self):
         code, _, err = self.run_cli("fetch", "-c", "bogus")

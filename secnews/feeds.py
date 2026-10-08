@@ -5,13 +5,14 @@ from __future__ import annotations
 import gzip
 import html
 import html.entities
+import json
 import re
 import urllib.request
 import zlib
 from urllib.parse import parse_qsl, urlencode, urljoin, urlsplit, urlunsplit
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from html.parser import HTMLParser
 
@@ -428,8 +429,45 @@ def _page_url(url: str, page: int) -> str:
     return urlunsplit(parts._replace(query=urlencode(query)))
 
 
+KEV_MAX_AGE_DAYS = 120  # the catalogue holds every entry since 2021; only recent additions are news
+
+
+def parse_kev(data: bytes, source: Source) -> list[Article]:
+    """CISA Known Exploited Vulnerabilities catalogue (JSON): one story per recently added CVE."""
+    payload = json.loads(data.decode("utf-8"))
+    cutoff = datetime.now(timezone.utc) - timedelta(days=KEV_MAX_AGE_DAYS)
+    articles = []
+    for v in payload.get("vulnerabilities", []):
+        cve, added = (v.get("cveID") or "").strip(), parse_date(v.get("dateAdded"))
+        if not cve or not added or added < cutoff:
+            continue
+        product = " ".join(x for x in (v.get("vendorProject"), v.get("product")) if x)
+        name = v.get("vulnerabilityName") or f"{product} vulnerability"
+        parts = [v.get("shortDescription", "").strip()]
+        if v.get("requiredAction"):
+            parts.append(f"Required action: {v['requiredAction'].strip()}")
+        if v.get("dueDate"):
+            parts.append(f"Federal agencies must remediate by {v['dueDate']}.")
+        tags = ["Known Exploited Vulnerability", "actively exploited"]
+        if (v.get("knownRansomwareCampaignUse") or "").lower() == "known":
+            parts.append("Known to be used in ransomware campaigns.")
+            tags.append("ransomware")
+        articles.append(Article(
+            title=f"CISA adds {cve} to Known Exploited Vulnerabilities: {name}",
+            link=f"https://nvd.nist.gov/vuln/detail/{cve}",
+            source=source.name,
+            source_type=source.type,
+            published=added,
+            summary=truncate(" ".join(p for p in parts if p)),
+            feed_tags=tags,
+        ))
+    return articles
+
+
 def _fetch_feed(url: str, source: Source, timeout: float) -> list[Article]:
     data = _download(url, timeout)
+    if source.format == "cisa-kev":
+        return parse_kev(data, source)
     if data.lstrip()[:15].lower().startswith((b"<!doctype html", b"<html")):
         raise ValueError("received an HTML page instead of a feed (blocked or URL changed)")
     return parse_feed(data, source)
@@ -443,7 +481,7 @@ def fetch_source(source: Source, timeout: float = 20.0, backfill: int = 0) -> Fe
         msg = str(exc) or exc.__class__.__name__
         return FetchResult(source, [], error=f"{exc.__class__.__name__}: {msg}"[:300])
     seen = {a.link for a in articles}
-    for page in range(2, backfill + 2):
+    for page in range(2, (backfill + 2) if source.format == "feed" else 2):
         try:
             older = [a for a in _fetch_feed(_page_url(source.url, page), source, timeout) if a.link not in seen]
         except Exception:  # paging unsupported or past the end: keep what we have
@@ -463,7 +501,12 @@ def fetch_all(sources: list[Source], workers: int = 10, timeout: float = 20.0, b
         return list(pool.map(lambda s: fetch_source(s, timeout, backfill), sources))
 
 
+_NO_LOOKUP_HOSTS = ("https://nvd.nist.gov/",)  # reference pages with no article picture or prose
+
+
 def needs_page_lookup(article: Article) -> bool:
+    if article.link.startswith(_NO_LOOKUP_HOSTS):
+        return False
     return not article.image or len(article.summary) < SHORT_SUMMARY
 
 

@@ -1,4 +1,4 @@
-"""Command-line interface: ``secnews fetch | sources | categories``."""
+"""Command-line interface: ``secnews fetch | briefing | subscribers | sources | categories``."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from pathlib import Path
 from . import __version__
 from .archive import DEFAULT_KEEP_DAYS, default_path, load_archive, save_archive
 from .classify import Classifier, deduplicate, filter_articles, resolve_ids
-from .config import load_sources, load_taxonomy
+from .config import load_site, load_sources, load_taxonomy
 from .feeds import enrich_from_pages, fetch_all, needs_page_lookup
 from .models import Article
 from .render import FORMATS, render
@@ -24,6 +24,30 @@ def _date_arg(value: str) -> datetime:
         raise argparse.ArgumentTypeError(f"expected YYYY-MM-DD, got '{value}'")
 
 
+def _gather_options() -> argparse.ArgumentParser:
+    """Options shared by every command that collects articles (fetch, briefing)."""
+    g = argparse.ArgumentParser(add_help=False)
+    c = g.add_argument_group("collecting")
+    c.add_argument("--type", action="append", metavar="TYPE",
+                   help="source type: news, specialist, vendor-research, government, blog")
+    c.add_argument("--input", metavar="JSON", help="re-use articles from a previous --format json run instead of fetching")
+    c.add_argument("--no-merge", action="store_true", help="don't merge the same story reported by multiple outlets")
+    c.add_argument("--no-page-lookup", "--no-images", dest="no_page_lookup", action="store_true",
+                   help="don't open article pages to find missing pictures or expand one-line summaries")
+    c.add_argument("--archive", metavar="JSON",
+                   help="where fetched articles are kept between runs (default: ~/.secnews/archive.json)")
+    c.add_argument("--keep-days", type=int, default=DEFAULT_KEEP_DAYS,
+                   help=f"how long the archive keeps articles (default: {DEFAULT_KEEP_DAYS})")
+    c.add_argument("--no-archive", action="store_true", help="don't read or update the archive")
+    c.add_argument("--backfill", type=int, default=0, metavar="PAGES",
+                   help="also fetch up to PAGES older pages of each feed that supports it, to fill in history "
+                        "(e.g. 5 on a first run; default: 0)")
+    c.add_argument("--workers", type=int, default=10, help="parallel downloads (default: 10)")
+    c.add_argument("--timeout", type=float, default=20, help="per-feed timeout in seconds (default: 20)")
+    c.add_argument("-q", "--quiet", action="store_true", help="suppress progress output")
+    return g
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="secnews",
@@ -32,9 +56,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     p.add_argument("--sources-file", help="custom sources JSON (default: bundled list)")
     p.add_argument("--categories-file", help="custom categories JSON (default: bundled rules)")
+    p.add_argument("--site-file", help="custom page/briefing settings JSON (default: bundled site.json)")
     sub = p.add_subparsers(dest="command", required=True)
+    gather = _gather_options()
 
-    f = sub.add_parser("fetch", help="fetch, tag and filter articles, then write a report",
+    f = sub.add_parser("fetch", parents=[gather], help="fetch, tag and filter articles, then write a report",
                        description="Examples:\n"
                                    "  secnews fetch -o digest.html\n"
                                    "  secnews fetch --days 7 -c vulnerabilities -c ransomware -o vulns.md\n"
@@ -53,28 +79,34 @@ def build_parser() -> argparse.ArgumentParser:
     flt.add_argument("-i", "--industry", action="append", metavar="SECTOR", help="industry, e.g. healthcare, finance, charity")
     flt.add_argument("-l", "--location", action="append", metavar="REGION", help="location, e.g. uk, europe, north-america; country names also work (germany -> europe)")
     flt.add_argument("-s", "--source", action="append", metavar="NAME", help="only sources whose name contains NAME")
-    flt.add_argument("--type", action="append", metavar="TYPE", help="source type: news, vendor-research, government, blog")
     flt.add_argument("--search", metavar="TEXT", help="free-text match on title/summary/CVE")
     flt.add_argument("--cve-only", action="store_true", help="only articles that mention a CVE id")
 
     out = f.add_argument_group("output")
     out.add_argument("-o", "--output", help="output file; format inferred from extension (.md .html .json .csv). Default: stdout")
     out.add_argument("-f", "--format", choices=FORMATS, help="output format (default: from -o extension, else md)")
-    out.add_argument("--input", metavar="JSON", help="re-use articles from a previous --format json run instead of fetching")
-    out.add_argument("--no-merge", action="store_true", help="don't merge the same story reported by multiple outlets")
-    out.add_argument("--no-page-lookup", "--no-images", dest="no_page_lookup", action="store_true",
-                     help="don't open article pages to find missing pictures or expand one-line summaries")
-    out.add_argument("--archive", metavar="JSON",
-                     help="where fetched articles are kept between runs (default: ~/.secnews/archive.json)")
-    out.add_argument("--keep-days", type=int, default=DEFAULT_KEEP_DAYS,
-                     help=f"how long the archive keeps articles (default: {DEFAULT_KEEP_DAYS})")
-    out.add_argument("--no-archive", action="store_true", help="don't read or update the archive")
-    out.add_argument("--backfill", type=int, default=0, metavar="PAGES",
-                     help="also fetch up to PAGES older pages of each feed that supports it, to fill in history "
-                          "(e.g. 5 on a first run; default: 0)")
-    out.add_argument("--workers", type=int, default=10, help="parallel downloads (default: 10)")
-    out.add_argument("--timeout", type=float, default=20, help="per-feed timeout in seconds (default: 20)")
-    out.add_argument("-q", "--quiet", action="store_true", help="suppress progress output")
+
+    b = sub.add_parser("briefing", parents=[gather], help="build the daily briefing email and optionally send it",
+                       description="Builds an email of the top stories from the last 24 hours.\n\n"
+                                   "Examples:\n"
+                                   "  secnews briefing -o briefing.html          # preview it in a browser\n"
+                                   "  secnews briefing --send                    # email everyone in the subscriber list\n"
+                                   "  secnews briefing --send --to me@example.com\n\n"
+                                   "Sending uses these environment variables:\n"
+                                   "  SECNEWS_SMTP_HOST, SECNEWS_SMTP_PORT (587), SECNEWS_SMTP_USER, SECNEWS_SMTP_PASSWORD,\n"
+                                   "  SECNEWS_SMTP_FROM, SECNEWS_SMTP_SECURITY (starttls | ssl | none)",
+                       formatter_class=argparse.RawDescriptionHelpFormatter)
+    b.add_argument("--hours", type=int, default=24, help="stories from the last N hours (default: 24)")
+    b.add_argument("--max", type=int, help="maximum stories (default: briefing_max_stories in site.json)")
+    b.add_argument("-o", "--output", help="also save the email as an HTML file")
+    b.add_argument("--send", action="store_true", help="email it to the subscriber list (or --to)")
+    b.add_argument("--to", action="append", metavar="EMAIL", help="send to these addresses instead of the subscriber list")
+    b.add_argument("--subscribers", metavar="FILE", help="subscriber list (default: ~/.secnews/subscribers.txt)")
+
+    m = sub.add_parser("subscribers", help="manage the daily briefing subscriber list")
+    m.add_argument("action", choices=["list", "add", "remove"])
+    m.add_argument("emails", nargs="*", metavar="EMAIL")
+    m.add_argument("--subscribers", metavar="FILE", help="subscriber list (default: ~/.secnews/subscribers.txt)")
 
     s = sub.add_parser("sources", help="list configured sources")
     s.add_argument("--check", action="store_true", help="fetch every feed and report status / article counts")
@@ -88,17 +120,12 @@ def _log(args, msg: str) -> None:
         print(msg, file=sys.stderr)
 
 
-def cmd_fetch(args) -> int:
-    all_sources = sources = load_sources(args.sources_file)
-    taxonomy = load_taxonomy(args.categories_file)
-    try:
-        topics = resolve_ids(args.category, taxonomy.topics, "topic")
-        industries = resolve_ids(args.industry, taxonomy.industries, "industry")
-        locations = resolve_ids(args.location, taxonomy.locations, "location")
-    except ValueError as e:
-        print(f"error: {e}", file=sys.stderr)
-        return 2
+def _gather(args, taxonomy) -> tuple[list[Article], list[Article], dict[str, str], Path | None]:
+    """Fetch (or load), merge the archive, tag and de-duplicate.
 
+    Returns (articles for this run, every article incl. other source types, fetch errors, archive path).
+    """
+    all_sources = sources = load_sources(args.sources_file)
     if args.type:
         wanted = {t.strip().lower() for raw in args.type for t in raw.split(",")}
         sources = [s for s in sources if s.type.lower() in wanted]
@@ -146,6 +173,31 @@ def cmd_fetch(args) -> int:
     if archive_path and args.type:
         allowed = {s.name for s in sources}
         articles = [a for a in articles if a.source in allowed]
+    return articles, everything, errors, archive_path
+
+
+def _enrich_and_archive(args, selected: list[Article], everything: list[Article], archive_path: Path | None) -> None:
+    pending = sum(1 for a in selected if needs_page_lookup(a))
+    if pending and not args.no_page_lookup:
+        _log(args, f"Reading {pending} article pages for missing pictures and short summaries…")
+        images, summaries = enrich_from_pages(selected, workers=args.workers, timeout=min(args.timeout, 10))
+        _log(args, f"  found {images} pictures, expanded {summaries} summaries")
+    if archive_path:
+        kept = save_archive(archive_path, everything, args.keep_days)
+        _log(args, f"Archive now holds {kept} articles from the last {args.keep_days} days")
+
+
+def cmd_fetch(args) -> int:
+    taxonomy = load_taxonomy(args.categories_file)
+    try:
+        topics = resolve_ids(args.category, taxonomy.topics, "topic")
+        industries = resolve_ids(args.industry, taxonomy.industries, "industry")
+        locations = resolve_ids(args.location, taxonomy.locations, "location")
+    except ValueError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
+
+    articles, everything, errors, archive_path = _gather(args, taxonomy)
 
     now = datetime.now(timezone.utc)
     since = args.since or (now - timedelta(days=args.days))
@@ -162,16 +214,7 @@ def cmd_fetch(args) -> int:
         cve_only=args.cve_only,
         include_undated=args.include_undated,
     )
-
-    pending = sum(1 for a in filtered if needs_page_lookup(a))
-    if pending and not args.no_page_lookup:
-        _log(args, f"Reading {pending} article pages for missing pictures and short summaries…")
-        images, summaries = enrich_from_pages(filtered, workers=args.workers, timeout=min(args.timeout, 10))
-        _log(args, f"  found {images} pictures, expanded {summaries} summaries")
-
-    if archive_path:
-        kept = save_archive(archive_path, everything, args.keep_days)
-        _log(args, f"Archive now holds {kept} articles from the last {args.keep_days} days")
+    _enrich_and_archive(args, filtered, everything, archive_path)
 
     filters = []
     if topics:
@@ -188,7 +231,8 @@ def cmd_fetch(args) -> int:
         filters.append(f'search: "{args.search}"')
     if args.cve_only:
         filters.append("CVE mentions only")
-    meta = {"since": since, "until": until or now, "errors": errors, "filters": "; ".join(filters)}
+    meta = {"since": since, "until": until or now, "errors": errors, "filters": "; ".join(filters),
+            "site": load_site(args.site_file)}
 
     fmt = args.format
     if not fmt and args.output:
@@ -203,6 +247,75 @@ def cmd_fetch(args) -> int:
         _log(args, f"Wrote {len(filtered)} articles to {args.output} ({fmt})")
     else:
         sys.stdout.write(text if text.endswith("\n") else text + "\n")
+    return 0
+
+
+def cmd_briefing(args) -> int:
+    from . import briefing as bf
+
+    taxonomy = load_taxonomy(args.categories_file)
+    site = load_site(args.site_file)
+    title = site.get("briefing_title") or "Daily Briefing"
+    limit = args.max or int(site.get("briefing_max_stories") or 15)
+
+    articles, everything, _, archive_path = _gather(args, taxonomy)
+    now = datetime.now(timezone.utc)
+    recent = filter_articles(articles, since=now - timedelta(hours=args.hours))
+    stories = bf.pick_stories(recent, limit)
+    _enrich_and_archive(args, stories, everything, archive_path)
+
+    html_body = bf.build_html(stories, taxonomy, title, now)
+    if args.output:
+        Path(args.output).parent.mkdir(parents=True, exist_ok=True)
+        Path(args.output).write_text(html_body, encoding="utf-8")
+        _log(args, f"Wrote briefing with {len(stories)} stories to {args.output}")
+    if not args.send:
+        if not args.output:
+            sys.stdout.write(bf.build_text(stories, title, now) + "\n")
+        return 0
+
+    recipients = [e.strip().lower() for e in args.to] if args.to else bf.load_subscribers(
+        Path(args.subscribers) if args.subscribers else bf.subscribers_path())
+    if not recipients:
+        print("error: nobody to send to. Add people with 'secnews subscribers add EMAIL' or use --to.", file=sys.stderr)
+        return 2
+    try:
+        settings = bf.smtp_settings()
+    except bf.SmtpConfigError as e:
+        print(f"error: email isn't configured: {e}. See 'secnews briefing -h'.", file=sys.stderr)
+        return 2
+    subject = f"{title}: {now.strftime('%d %b %Y')}"
+    failed = bf.send(recipients, subject, html_body, bf.build_text(stories, title, now), settings)
+    _log(args, f"Sent briefing to {len(recipients) - len(failed)} of {len(recipients)} subscribers")
+    for addr in failed:
+        print(f"  ✗ could not send to {addr}", file=sys.stderr)
+    return 1 if failed and len(failed) == len(recipients) else 0
+
+
+def cmd_subscribers(args) -> int:
+    from . import briefing as bf
+
+    path = Path(args.subscribers) if args.subscribers else bf.subscribers_path()
+    current = bf.load_subscribers(path)
+    if args.action == "list":
+        for e in current:
+            print(e)
+        print(f"{len(current)} subscriber(s) in {path}", file=sys.stderr)
+        return 0
+    if not args.emails:
+        print(f"error: give at least one email address to {args.action}", file=sys.stderr)
+        return 2
+    emails = [e.strip().lower() for e in args.emails]
+    bad = [e for e in emails if not bf.EMAIL_RE.match(e)]
+    if bad:
+        print(f"error: not an email address: {', '.join(bad)}", file=sys.stderr)
+        return 2
+    if args.action == "add":
+        updated = current + [e for e in emails if e not in current]
+    else:
+        updated = [e for e in current if e not in emails]
+    bf.save_subscribers(path, updated)
+    print(f"{len(updated)} subscriber(s) in {path}")
     return 0
 
 
@@ -245,4 +358,6 @@ def cmd_categories(args) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    return {"fetch": cmd_fetch, "sources": cmd_sources, "categories": cmd_categories}[args.command](args)
+    commands = {"fetch": cmd_fetch, "briefing": cmd_briefing, "subscribers": cmd_subscribers,
+                "sources": cmd_sources, "categories": cmd_categories}
+    return commands[args.command](args)
