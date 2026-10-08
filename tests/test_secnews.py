@@ -86,6 +86,24 @@ class ClassifierTests(unittest.TestCase):
     def test_single_weak_industry_mention_is_ignored(self):
         self.assertEqual(tagged("Patch now", "A school reported it.").industries, [])
 
+    def test_charity_industry(self):
+        a = tagged("Fake donation sites target Red Cross supporters", "Scammers posed as a charity.")
+        self.assertIn("charity", a.industries)
+        self.assertIn("fraud-cybercrime", a.topics)
+
+    def test_locations(self):
+        a = tagged("UK charity hit by ransomware", "The British non-profit told the ICO.")
+        self.assertEqual(a.locations, ["uk-ireland"])
+        self.assertIn("europe", tagged("German manufacturer recovers from cyberattack").locations)
+        self.assertIn("north-america", tagged("U.S. hospitals warned", "").locations)
+        self.assertEqual(tagged("Patch now", "Mentions Europe once.").locations, [])  # one weak hit isn't enough
+        self.assertEqual(tagged("North Korean hackers steal crypto").locations, ["asia-pacific"])
+        self.assertNotIn("north-america", tagged("Hackers target Latin America banks").locations)
+
+    def test_source_forced_location(self):
+        c = Classifier(TAX, [Source("NCSC", "x", locations=["uk-ireland"])])
+        self.assertEqual(c.classify(Article(title="New guidance", link="https://x", source="NCSC")).locations, ["uk-ireland"])
+
     def test_unmatched_is_general(self):
         self.assertEqual(tagged("Weekly podcast episode").topics, ["general"])
 
@@ -128,6 +146,8 @@ class DedupFilterTests(unittest.TestCase):
         self.assertEqual(resolve_ids(["fraud", "Ransomware & Extortion"], TAX.topics, "topic"), {"fraud-cybercrime", "ransomware"})
         self.assertEqual(resolve_ids(["vuln,phish"], TAX.topics, "topic"), {"vulnerabilities", "phishing"})
         self.assertEqual(resolve_ids(["health"], TAX.industries, "industry"), {"healthcare"})
+        self.assertEqual(resolve_ids(["uk", "Germany"], TAX.locations, "location"), {"uk-ireland", "europe"})
+        self.assertEqual(resolve_ids(["us"], TAX.locations, "location"), {"north-america"})
         with self.assertRaises(ValueError):
             resolve_ids(["nonsense"], TAX.topics, "topic")
 
@@ -137,10 +157,12 @@ class ConfigTests(unittest.TestCase):
         sources = load_sources()
         self.assertGreaterEqual(len(sources), 25)
         topic_ids = {t.id for t in TAX.topics}
+        location_ids = {l.id for l in TAX.locations}
         for s in sources:
             self.assertTrue(s.url.startswith("https://"), s.name)
             self.assertTrue(set(s.categories) <= topic_ids, s.name)
-        all_ids = [c.id for c in TAX.topics + TAX.industries]
+            self.assertTrue(set(s.locations) <= location_ids, s.name)
+        all_ids = [c.id for c in TAX.topics + TAX.industries + TAX.locations]
         self.assertEqual(len(all_ids), len(set(all_ids)))
 
 
@@ -195,6 +217,20 @@ class CliTests(unittest.TestCase):
         _, out, _ = self.run_cli("fetch", "--since", "2026-09-30", "--type", "vendor-research", "-q")
         self.assertIn("LockBit", out)
         self.assertNotIn("Police arrest", out)
+
+    def test_location_and_charity_filters(self):
+        self.sources.write_text(json.dumps({"sources": [{"name": "UK News", "url": (FIX / "charity.xml").as_uri()}]}))
+        common = ["fetch", "--since", "2026-09-30", "-q"]
+        _, out, _ = self.run_cli(*common, "-l", "uk", "-i", "charity")
+        self.assertIn("UK charity hit by ransomware", out)
+        self.assertNotIn("German", out)
+        self.assertIn("Locations: UK & Ireland", out)
+        _, out, _ = self.run_cli(*common, "-l", "europe")
+        self.assertIn("German manufacturer", out)
+        self.assertNotIn("UK charity", out)
+        csv_path = self.tmp / "loc.csv"
+        self.run_cli(*common, "-o", str(csv_path))
+        self.assertIn("locations", csv_path.read_text().splitlines()[0])
 
     def test_bad_category(self):
         code, _, err = self.run_cli("fetch", "-c", "bogus")

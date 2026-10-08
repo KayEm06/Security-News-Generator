@@ -38,6 +38,7 @@ def build_parser() -> argparse.ArgumentParser:
                                    "  secnews fetch -o digest.html\n"
                                    "  secnews fetch --days 7 -c vulnerabilities -c ransomware -o vulns.md\n"
                                    "  secnews fetch -i healthcare,finance --format csv -o sectors.csv\n"
+                                   "  secnews fetch -l uk -i charity -o uk-charities.md\n"
                                    "  secnews fetch --input last-week.json -c fraud -o fraud.md",
                        formatter_class=argparse.RawDescriptionHelpFormatter)
     when = f.add_argument_group("time window")
@@ -48,7 +49,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     flt = f.add_argument_group("filters (repeat or comma-separate; ids, names or prefixes accepted)")
     flt.add_argument("-c", "--category", action="append", metavar="TOPIC", help="topic, e.g. vulnerabilities, fraud, ransomware")
-    flt.add_argument("-i", "--industry", action="append", metavar="SECTOR", help="industry, e.g. healthcare, finance")
+    flt.add_argument("-i", "--industry", action="append", metavar="SECTOR", help="industry, e.g. healthcare, finance, charity")
+    flt.add_argument("-l", "--location", action="append", metavar="REGION", help="location, e.g. uk, europe, north-america; country names also work (germany -> europe)")
     flt.add_argument("-s", "--source", action="append", metavar="NAME", help="only sources whose name contains NAME")
     flt.add_argument("--type", action="append", metavar="TYPE", help="source type: news, vendor-research, government, blog")
     flt.add_argument("--search", metavar="TEXT", help="free-text match on title/summary/CVE")
@@ -66,7 +68,7 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("sources", help="list configured sources")
     s.add_argument("--check", action="store_true", help="fetch every feed and report status / article counts")
 
-    sub.add_parser("categories", help="list topic and industry categories")
+    sub.add_parser("categories", help="list topic, industry and location categories")
     return p
 
 
@@ -81,6 +83,7 @@ def cmd_fetch(args) -> int:
     try:
         topics = resolve_ids(args.category, taxonomy.topics, "topic")
         industries = resolve_ids(args.industry, taxonomy.industries, "industry")
+        locations = resolve_ids(args.location, taxonomy.locations, "location")
     except ValueError as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
@@ -128,6 +131,7 @@ def cmd_fetch(args) -> int:
         until=until,
         topics=topics or None,
         industries=industries or None,
+        locations=locations or None,
         sources=args.source,
         search=args.search,
         cve_only=args.cve_only,
@@ -139,6 +143,8 @@ def cmd_fetch(args) -> int:
         filters.append("categories: " + ", ".join(taxonomy.name_of(t) for t in sorted(topics)))
     if industries:
         filters.append("industries: " + ", ".join(taxonomy.name_of(i) for i in sorted(industries)))
+    if locations:
+        filters.append("locations: " + ", ".join(taxonomy.name_of(l) for l in sorted(locations)))
     if args.source:
         filters.append("sources: " + ", ".join(args.source))
     if args.type:
@@ -189,7 +195,12 @@ def cmd_sources(args) -> int:
 
 def cmd_categories(args) -> int:
     t = load_taxonomy(args.categories_file)
-    for title, cats in (("Topics (-c/--category)", t.topics), ("Industries (-i/--industry)", t.industries)):
+    groups = (
+        ("Topics (-c/--category)", t.topics),
+        ("Industries (-i/--industry)", t.industries),
+        ("Locations (-l/--location)", t.locations),
+    )
+    for title, cats in groups:
         print(title)
         for c in cats:
             print(f"  {c.id:<20} {c.name}")

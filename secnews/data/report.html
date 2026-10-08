@@ -81,6 +81,8 @@ article h4 a:hover { text-decoration: underline; text-decoration-color: var(--si
 .tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 9px; }
 .tag { font: 500 10.5px/1 var(--mono); letter-spacing: .05em; text-transform: uppercase; padding: 4px 6px; background: var(--tag-bg); color: var(--ink); }
 .tag.ind { background: transparent; border: 1px solid var(--rule); color: var(--muted); padding: 3px 5px; }
+.tag.loc { background: transparent; border: 1px dashed var(--muted); color: var(--muted); padding: 3px 5px; }
+.tag.loc::before { content: "◎ "; }
 .tag.cve { background: transparent; color: var(--cve); border: 1px solid currentColor; padding: 3px 5px; text-transform: none; }
 .tag.hot { background: var(--signal); color: var(--signal-ink); }
 .errors { border: 1px solid var(--signal); background: var(--signal-soft); padding: 8px 12px; font: 12.5px/1.5 var(--mono); margin-bottom: 14px; }
@@ -106,6 +108,8 @@ article h4 a:hover { text-decoration: underline; text-decoration-color: var(--si
     <div class="chips" id="topics"></div>
     <h3>Industry <button class="link" data-clear="industries">clear</button></h3>
     <div class="chips" id="industries"></div>
+    <h3>Location <button class="link" data-clear="locations">clear</button></h3>
+    <div class="chips" id="locations"></div>
     <h3>Source</h3>
     <select id="source"><option value="">All sources</option></select>
     <h3>Published on or after</h3>
@@ -120,6 +124,7 @@ article h4 a:hover { text-decoration: underline; text-decoration-color: var(--si
       <select id="group" aria-label="Group by">
         <option value="topic">Group by category</option>
         <option value="industry">Group by industry</option>
+        <option value="location">Group by location</option>
         <option value="date">Group by day</option>
         <option value="source">Group by source</option>
         <option value="none">No grouping</option>
@@ -138,8 +143,9 @@ const DATA = /*__DATA__*/null;
 const $ = (id) => document.getElementById(id);
 const topicName = Object.fromEntries(DATA.topics.map(t => [t.id, t.name]));
 const indName = Object.fromEntries(DATA.industries.map(t => [t.id, t.name]));
+const locName = Object.fromEntries(DATA.locations.map(t => [t.id, t.name]));
 const arts = DATA.articles.map((a, i) => ({ ...a, i, date: a.published ? new Date(a.published) : null }));
-const state = { topics: new Set(), industries: new Set(), selected: new Set() };
+const state = { topics: new Set(), industries: new Set(), locations: new Set(), selected: new Set() };
 const store = (() => { try { return window.localStorage; } catch (e) { return null; } })();
 const KEY = "secnews-selected:" + DATA.generated;
 try { JSON.parse(store?.getItem(KEY) || "[]").forEach(l => { const a = arts.find(x => x.link === l); if (a) state.selected.add(a.i); }); } catch (e) {}
@@ -181,6 +187,7 @@ function buildChips(el, items, key, field) {
 }
 buildChips($("topics"), DATA.topics, "topics", "topics");
 buildChips($("industries"), DATA.industries, "industries", "industries");
+buildChips($("locations"), DATA.locations, "locations", "locations");
 document.querySelectorAll("[data-clear]").forEach(b => b.addEventListener("click", () => {
   state[b.dataset.clear].clear();
   $(b.dataset.clear).querySelectorAll(".chip").forEach(c => c.setAttribute("aria-pressed", "false"));
@@ -194,6 +201,7 @@ function visible() {
   return arts.filter(a =>
     (!state.topics.size || a.topics.some(t => state.topics.has(t))) &&
     (!state.industries.size || a.industries.some(t => state.industries.has(t))) &&
+    (!state.locations.size || a.locations.some(t => state.locations.has(t))) &&
     (!src || a.source === src) &&
     (!from || (a.date && fmtDate(a.date) >= from)) &&
     (!$("cveOnly").checked || a.cves.length) &&
@@ -207,6 +215,10 @@ function groupKey(a, mode) {
     return [active || a.topics[0]];
   }
   if (mode === "industry") return a.industries.length ? [a.industries[0]] : ["_none"];
+  if (mode === "location") {
+    const active = state.locations.size ? a.locations.find(t => state.locations.has(t)) : null;
+    return [active || a.locations[0] || "_none"];
+  }
   if (mode === "date") return [fmtDate(a.date)];
   if (mode === "source") return [a.source];
   return [""];
@@ -214,17 +226,20 @@ function groupKey(a, mode) {
 function groupLabel(k, mode) {
   if (mode === "topic") return topicName[k] || k;
   if (mode === "industry") return k === "_none" ? "No specific industry" : indName[k];
+  if (mode === "location") return k === "_none" ? "No specific location" : locName[k];
   return k;
 }
 function groupOrder(mode) {
   if (mode === "topic") return DATA.topics.map(t => t.id);
   if (mode === "industry") return DATA.industries.map(t => t.id).concat("_none");
+  if (mode === "location") return DATA.locations.map(t => t.id).concat("_none");
   return null;
 }
 
 function card(a) {
   const tags = a.topics.filter(t => t !== "general").map(t => `<span class="tag">${esc(topicName[t])}</span>`)
     .concat(a.industries.map(t => `<span class="tag ind">${esc(indName[t])}</span>`))
+    .concat(a.locations.map(t => `<span class="tag loc">${esc(locName[t])}</span>`))
     .concat(a.cves.map(c => `<span class="tag cve">${esc(c)}</span>`));
   if (a.also_reported_by.length) tags.unshift(`<span class="tag hot" title="${esc(a.also_reported_by.join(", "))}">${a.also_reported_by.length + 1} outlets</span>`);
   const sel = state.selected.has(a.i);
@@ -281,6 +296,7 @@ function markdown() {
       if (a.also_reported_by.length) meta.push(`also reported by ${a.also_reported_by.join(", ")}`);
       lines.push(meta.join(" · ") + "  ");
       if (a.industries.length) lines.push(`Sectors: ${a.industries.map(i => indName[i]).join(", ")}  `);
+      if (a.locations.length) lines.push(`Locations: ${a.locations.map(l => locName[l]).join(", ")}  `);
       if (a.cves.length) lines.push(`CVEs: ${a.cves.join(", ")}  `);
       if (a.summary) lines.push(``, a.summary);
       lines.push(``);

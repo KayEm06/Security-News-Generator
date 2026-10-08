@@ -1,5 +1,5 @@
 {
-  "_comment": "Feeds pulled by secnews. Add/remove entries freely. 'type' groups sources (news, vendor-research, government, blog). 'categories' are topic ids (see categories.json) applied to every article from that source in addition to keyword matches. Set 'enabled': false to skip a feed.",
+  "_comment": "Feeds pulled by secnews. Add/remove entries freely. 'type' groups sources (news, vendor-research, government, blog). 'categories' (topic ids) and 'locations' (location ids) from categories.json are applied to every article from that source in addition to keyword matches. Set 'enabled': false to skip a feed.",
   "sources": [
     {"name": "The Hacker News", "url": "https://feeds.feedburner.com/TheHackersNews", "type": "news"},
     {"name": "BleepingComputer", "url": "https://www.bleepingcomputer.com/feed/", "type": "news"},
@@ -19,8 +19,8 @@
     {"name": "Schneier on Security", "url": "https://www.schneier.com/feed/atom/", "type": "blog"},
     {"name": "SANS Internet Storm Center", "url": "https://isc.sans.edu/rssfeed_full.xml", "type": "blog"},
 
-    {"name": "CISA Advisories", "url": "https://www.cisa.gov/cybersecurity-advisories/all.xml", "type": "government", "categories": ["vulnerabilities"]},
-    {"name": "NCSC UK", "url": "https://www.ncsc.gov.uk/api/1/services/v1/all-rss-feed.xml", "type": "government"},
+    {"name": "CISA Advisories", "url": "https://www.cisa.gov/cybersecurity-advisories/all.xml", "type": "government", "categories": ["vulnerabilities"], "locations": ["north-america"]},
+    {"name": "NCSC UK", "url": "https://www.ncsc.gov.uk/api/1/services/v1/all-rss-feed.xml", "type": "government", "locations": ["uk-ireland"]},
 
     {"name": "Microsoft Security Blog", "url": "https://www.microsoft.com/en-us/security/blog/feed/", "type": "vendor-research"},
     {"name": "Google Threat Intelligence", "url": "https://cloud.google.com/blog/topics/threat-intelligence/rss/", "type": "vendor-research"},

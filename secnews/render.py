@@ -79,6 +79,8 @@ def to_markdown(articles: list[Article], taxonomy: Taxonomy, meta: dict) -> str:
                 bits.append("Also: " + ", ".join(others))
             if a.industries:
                 bits.append("Sectors: " + ", ".join(name(i) for i in a.industries))
+            if a.locations:
+                bits.append("Locations: " + ", ".join(name(l) for l in a.locations))
             out.append(" · ".join(bits) + "  ")
             if a.also_reported_by:
                 out.append(f"Also reported by: {', '.join(a.also_reported_by)}  ")
@@ -110,7 +112,7 @@ def to_json(articles: list[Article], taxonomy: Taxonomy, meta: dict) -> str:
 def to_csv(articles: list[Article], taxonomy: Taxonomy, meta: dict) -> str:
     buf = io.StringIO()
     w = csv.writer(buf)
-    w.writerow(["published", "source", "title", "link", "primary_category", "categories", "industries", "cves", "also_reported_by", "summary"])
+    w.writerow(["published", "source", "title", "link", "primary_category", "categories", "industries", "locations", "cves", "also_reported_by", "summary"])
     for a in articles:
         w.writerow([
             a.published.isoformat() if a.published else "",
@@ -120,6 +122,7 @@ def to_csv(articles: list[Article], taxonomy: Taxonomy, meta: dict) -> str:
             taxonomy.name_of(a.primary_topic),
             "; ".join(taxonomy.name_of(t) for t in a.topics),
             "; ".join(taxonomy.name_of(i) for i in a.industries),
+            "; ".join(taxonomy.name_of(l) for l in a.locations),
             "; ".join(a.cves),
             "; ".join(a.also_reported_by),
             a.summary,
@@ -133,6 +136,7 @@ def to_html(articles: list[Article], taxonomy: Taxonomy, meta: dict) -> str:
         "generated": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
         "topics": [{"id": t.id, "name": t.name} for t in taxonomy.topics] + [{"id": "general", "name": "General"}],
         "industries": [{"id": i.id, "name": i.name} for i in taxonomy.industries],
+        "locations": [{"id": l.id, "name": l.name} for l in taxonomy.locations],
         "errors": meta.get("errors", {}),
         "articles": [a.to_dict() for a in articles],
     }

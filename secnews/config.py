@@ -15,6 +15,7 @@ class Source:
     url: str
     type: str = "news"
     categories: list[str] = field(default_factory=list)
+    locations: list[str] = field(default_factory=list)
     enabled: bool = True
 
 
@@ -29,11 +30,13 @@ class Category:
 class Taxonomy:
     topics: list[Category]
     industries: list[Category]
+    locations: list[Category] = field(default_factory=list)
     topic_min_score: int = 1
     industry_min_score: int = 2
+    location_min_score: int = 2
 
     def name_of(self, cat_id: str) -> str:
-        for c in self.topics + self.industries:
+        for c in self.topics + self.industries + self.locations:
             if c.id == cat_id:
                 return c.name
         return "General" if cat_id == "general" else cat_id
@@ -49,6 +52,8 @@ def load_taxonomy(path: Path | str | None = None) -> Taxonomy:
     return Taxonomy(
         topics=[Category(**c) for c in data["topics"]],
         industries=[Category(**c) for c in data["industries"]],
+        locations=[Category(**c) for c in data.get("locations", [])],
         topic_min_score=data.get("topic_min_score", 1),
         industry_min_score=data.get("industry_min_score", 2),
+        location_min_score=data.get("location_min_score", 2),
     )

@@ -32,7 +32,9 @@ class Classifier:
         self.taxonomy = taxonomy
         self._topics = [(c, _compile(c.keywords)) for c in taxonomy.topics]
         self._industries = [(c, _compile(c.keywords)) for c in taxonomy.industries]
+        self._locations = [(c, _compile(c.keywords)) for c in taxonomy.locations]
         self._source_topics = {s.name: s.categories for s in (sources or [])}
+        self._source_locations = {s.name: s.locations for s in (sources or [])}
 
     @staticmethod
     def _score(rules, title: str, body: str, min_score: int) -> list[str]:
@@ -58,6 +60,11 @@ class Classifier:
                 topics.append(forced)
         art.topics = topics or ["general"]
         art.industries = self._score(self._industries, art.title, body, t.industry_min_score)
+        locations = self._score(self._locations, art.title, body, t.location_min_score)
+        for forced in self._source_locations.get(art.source, []):
+            if forced not in locations:
+                locations.append(forced)
+        art.locations = locations
         art.cves = sorted({m.upper() for m in CVE_RE.findall(f"{art.title} {body}")})
         return art
 
@@ -128,6 +135,8 @@ def resolve_ids(values: list[str] | None, cats: list[Category], kind: str) -> se
                 out.add(lookup[v])
                 continue
             hits = {cid for key, cid in lookup.items() if key.startswith(v) or v in key.split(" ")}
+            if not hits:  # fall back to keywords, e.g. "germany" -> europe
+                hits = {c.id for c in cats if v in (k.lower() for k in c.keywords)}
             if len(hits) == 1:
                 out.add(hits.pop())
             else:
@@ -143,6 +152,7 @@ def filter_articles(
     until: datetime | None = None,
     topics: set[str] | None = None,
     industries: set[str] | None = None,
+    locations: set[str] | None = None,
     sources: list[str] | None = None,
     search: str | None = None,
     cve_only: bool = False,
@@ -163,6 +173,8 @@ def filter_articles(
         if topics and not topics.intersection(a.topics):
             continue
         if industries and not industries.intersection(a.industries):
+            continue
+        if locations and not locations.intersection(a.locations):
             continue
         if src_terms and not any(t in a.source.lower() for t in src_terms):
             continue

@@ -15,6 +15,7 @@ class Article:
     feed_tags: list[str] = field(default_factory=list)
     topics: list[str] = field(default_factory=list)
     industries: list[str] = field(default_factory=list)
+    locations: list[str] = field(default_factory=list)
     cves: list[str] = field(default_factory=list)
     also_reported_by: list[str] = field(default_factory=list)
 

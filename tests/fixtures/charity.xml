@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+<channel>
+  <title>Example UK News</title>
+  <item>
+    <title>UK charity hit by ransomware as donor data is stolen</title>
+    <link>https://uk.example.com/charity-ransomware</link>
+    <pubDate>Mon, 05 Oct 2026 09:00:00 +0100</pubDate>
+    <description>The British non-profit told the Charity Commission and the ICO that donations records were taken.</description>
+  </item>
+  <item>
+    <title>German manufacturer recovers from cyberattack</title>
+    <link>https://uk.example.com/german-manufacturer</link>
+    <pubDate>Sun, 04 Oct 2026 09:00:00 +0000</pubDate>
+    <description>Production lines in Germany were halted for three days.</description>
+  </item>
+</channel>
+</rss>

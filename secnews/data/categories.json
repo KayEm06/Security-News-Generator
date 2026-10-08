@@ -1,7 +1,8 @@
 {
-  "_comment": "Keyword rules used to tag articles. Keywords are case-insensitive whole-word/phrase matches against the title, summary and the feed's own tags. A hit in the title scores 2, elsewhere 1. An article is tagged with every topic/industry whose score reaches that group's min_score. Edit freely.",
+  "_comment": "Keyword rules used to tag articles. Keywords are case-insensitive whole-word/phrase matches against the title, summary and the feed's own tags. A hit in the title scores 2, elsewhere 1. An article is tagged with every topic/industry/location whose score reaches that group's min_score. Locations reflect places an article mentions, which can include where attackers are based as well as where victims are. Edit freely.",
   "topic_min_score": 1,
   "industry_min_score": 2,
+  "location_min_score": 2,
   "topics": [
     {
       "id": "vulnerabilities",
@@ -657,6 +658,96 @@
         "esports",
         "entertainment",
         "music"
+      ]
+    },
+    {
+      "id": "charity",
+      "name": "Charities & Non-profits",
+      "keywords": [
+        "charity", "charities", "charitable", "non-profit", "non-profits", "nonprofit", "nonprofits",
+        "not-for-profit", "NGO", "NGOs", "third sector", "voluntary sector", "donor", "donors",
+        "donation", "donations", "fundraising", "fundraiser", "humanitarian", "aid organization",
+        "aid organisation", "aid agency", "aid agencies", "Red Cross", "Charity Commission"
+      ]
+    }
+  ],
+  "locations": [
+    {
+      "id": "uk-ireland",
+      "name": "UK & Ireland",
+      "keywords": [
+        "UK", "U.K.", "United Kingdom", "Britain", "British", "England", "Scotland", "Scottish", "Wales",
+        "Welsh", "Northern Ireland", "Ireland", "Irish", "London", "Manchester", "Birmingham", "Edinburgh",
+        "Belfast", "Dublin", "NHS", "NCSC", "GCHQ", "National Crime Agency", "NCA", "Action Fraud",
+        "Metropolitan Police", "Information Commissioner's Office", "ICO", "Ofcom", "FCA", "HMRC",
+        "Bank of England", "Charity Commission", "Garda"
+      ]
+    },
+    {
+      "id": "europe",
+      "name": "Europe",
+      "keywords": [
+        "Europe", "European", "EU", "European Union", "Europol", "ENISA", "GDPR", "NIS2", "Germany", "German",
+        "France", "French", "Italy", "Italian", "Spain", "Spanish", "Netherlands", "Dutch", "Belgium",
+        "Belgian", "Poland", "Polish", "Sweden", "Swedish", "Norway", "Norwegian", "Denmark", "Danish",
+        "Finland", "Finnish", "Switzerland", "Swiss", "Austria", "Austrian", "Portugal", "Portuguese",
+        "Czech", "Romania", "Romanian", "Greece", "Greek", "Hungary", "Hungarian", "Ukraine", "Ukrainian",
+        "Estonia", "Latvia", "Lithuania", "Baltic", "Berlin", "Paris", "Brussels", "Amsterdam", "Madrid", "Rome"
+      ]
+    },
+    {
+      "id": "north-america",
+      "name": "North America",
+      "keywords": [
+        "US", "U.S.", "USA", "United States", "American", "Americans", "CISA", "FBI", "NSA",
+        "Department of Justice", "DOJ", "Treasury", "Pentagon", "SEC", "FTC", "FCC", "HHS", "Congress",
+        "Senate", "White House", "New York", "California", "Texas", "Canada", "Canadian", "Ottawa",
+        "Toronto", "RCMP"
+      ]
+    },
+    {
+      "id": "latin-america",
+      "name": "Latin America & Caribbean",
+      "keywords": [
+        "Latin America", "LATAM", "South America", "Central America", "Caribbean", "Brazil", "Brazilian",
+        "Mexico", "Mexican", "Argentina", "Chile", "Colombia", "Colombian", "Peru", "Venezuela", "Ecuador",
+        "Costa Rica"
+      ]
+    },
+    {
+      "id": "asia-pacific",
+      "name": "Asia-Pacific",
+      "keywords": [
+        "Asia", "Asian", "APAC", "Asia-Pacific", "China", "Chinese", "Hong Kong", "Taiwan", "Taiwanese",
+        "Japan", "Japanese", "South Korea", "South Korean", "Seoul", "North Korea", "North Korean", "DPRK",
+        "India", "Indian", "Pakistan", "Bangladesh", "Singapore", "Malaysia", "Indonesia", "Philippines",
+        "Vietnam", "Thailand", "Cambodia", "Myanmar", "Australia", "Australian", "New Zealand", "Tokyo",
+        "Beijing", "Sydney", "ACSC"
+      ]
+    },
+    {
+      "id": "middle-east",
+      "name": "Middle East & North Africa",
+      "keywords": [
+        "Middle East", "MENA", "Gulf", "Israel", "Israeli", "Iran", "Iranian", "Saudi Arabia", "Saudi",
+        "UAE", "United Arab Emirates", "Dubai", "Qatar", "Kuwait", "Bahrain", "Oman", "Jordan", "Lebanon",
+        "Iraq", "Syria", "Yemen", "Türkiye", "Turkish", "Egypt", "Egyptian", "Morocco", "Algeria", "Tunisia"
+      ]
+    },
+    {
+      "id": "africa",
+      "name": "Sub-Saharan Africa",
+      "keywords": [
+        "Africa", "African", "South Africa", "South African", "Nigeria", "Nigerian", "Kenya", "Kenyan",
+        "Ghana", "Ethiopia", "Uganda", "Tanzania", "Zambia", "Senegal", "Cameroon"
+      ]
+    },
+    {
+      "id": "russia-central-asia",
+      "name": "Russia & Central Asia",
+      "keywords": [
+        "Russia", "Russian", "Moscow", "Kremlin", "Belarus", "Belarusian", "Kazakhstan", "Uzbekistan",
+        "FSB", "GRU", "SVR"
       ]
     }
   ]
