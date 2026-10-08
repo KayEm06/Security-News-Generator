@@ -89,7 +89,9 @@ h2.group { margin: 6px 0 12px; font-size: 36px; line-height: 1.15; font-weight: 
 .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .thumb .ph { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; padding: 8px; text-align: center; color: #fff; font-weight: 700; font-size: 13px; letter-spacing: .06em; text-transform: uppercase; line-height: 1.2; }
 .summary { margin: 0; font-size: 12.5px; line-height: 15px; color: var(--text); overflow-wrap: anywhere; }
-.empty { font-size: 14px; color: var(--muted); padding: 24px 0; }
+.empty { font-size: 14px; color: var(--muted); padding: 24px 0; line-height: 1.5; }
+.widen { display: inline-block; margin-top: 8px; background: var(--navy); color: #fff; border: 0; border-radius: 0; padding: 6px 12px; font-size: 13px; font-weight: 700; cursor: pointer; }
+.widen:hover { background: var(--maroon); }
 </style>
 </head>
 <body>
@@ -164,7 +166,7 @@ const topicName = Object.fromEntries(DATA.topics.map(t => [t.id, t.name]));
 const indName = Object.fromEntries(DATA.industries.map(t => [t.id, t.name]));
 const locName = Object.fromEntries(DATA.locations.map(t => [t.id, t.name]));
 const arts = DATA.articles.map((a, i) => ({ ...a, i, date: a.published ? new Date(a.published) : null }));
-const state = { topics: new Set(), industries: new Set(), locations: new Set(), sources: new Set(), days: 0 };
+const state = { topics: new Set(), industries: new Set(), locations: new Set(), sources: new Set(), days: 7 };
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const safeUrl = (u) => /^https?:\/\//i.test(u || "") ? u : "";
@@ -211,8 +213,9 @@ document.querySelectorAll("[data-clear]").forEach(b => b.addEventListener("click
 }));
 
 // ---- Time period ---------------------------------------------------------
-const PERIODS = [[0, "Any time"], [1, "Last 24 hours"], [3, "Last 3 days"], [7, "Last 7 days"], [14, "Last 14 days"]];
-$("time").innerHTML = PERIODS.map(([d, l]) => `<button class="opt" data-days="${d}" aria-pressed="${d === 0}">${l}</button>`).join("");
+const PERIODS = [[1, "Last 24 hours"], [3, "Last 3 days"], [7, "Last 7 days"], [14, "Last 14 days"],
+  [30, "Last 30 days"], [60, "Last 60 days"], [90, "Last 90 days"], [0, "Any time"]];
+$("time").innerHTML = PERIODS.map(([d, l]) => `<button class="opt" data-days="${d}" aria-pressed="${d === state.days}">${l}</button>`).join("");
 const setDays = (d) => {
   state.days = d;
   $("time").querySelectorAll(".opt").forEach(o => o.setAttribute("aria-pressed", String(+o.dataset.days === d && !$("from").value)));
@@ -233,9 +236,9 @@ document.querySelectorAll(".nav a").forEach(a => a.addEventListener("click", () 
 ["q", "cveOnly", "group"].forEach(id => $(id).addEventListener("input", draw));
 
 // ---- Filtering, grouping, rendering --------------------------------------
-function visible() {
-  const q = $("q").value.trim().toLowerCase(), from = $("from").value;
-  const cutoff = state.days ? Date.now() - state.days * 864e5 : 0;
+function visible(anyTime = false) {
+  const q = $("q").value.trim().toLowerCase(), from = anyTime ? "" : $("from").value;
+  const cutoff = state.days && !anyTime ? Date.now() - state.days * 864e5 : 0;
   return arts.filter(a =>
     (!state.topics.size || a.topics.some(t => state.topics.has(t))) &&
     (!state.industries.size || a.industries.some(t => state.industries.has(t))) &&
@@ -245,6 +248,19 @@ function visible() {
     (!cutoff || (a.date && a.date.getTime() >= cutoff)) &&
     (!$("cveOnly").checked || a.cves.length) &&
     (!q || (a.title + " " + a.summary + " " + a.cves.join(" ") + " " + a.source).toLowerCase().includes(q)));
+}
+
+// When the time period hides everything, say when the latest match was and offer a period that reaches it.
+function emptyMessage() {
+  const older = visible(true).filter(a => a.date);
+  if (!older.length || (!state.days && !$("from").value)) {
+    return '<p class="empty">No articles match these filters.</p>';
+  }
+  const newest = older.reduce((m, a) => a.date > m ? a.date : m, older[0].date);
+  const ageDays = (Date.now() - newest.getTime()) / 864e5;
+  const fit = PERIODS.find(([d]) => d && d > state.days && d >= ageDays) || [0, "Any time"];
+  return `<p class="empty">Nothing in this time period. The most recent matching article is from ${niceDate(newest)}.
+    <button class="widen" data-days="${fit[0]}">Show ${fit[1].toLowerCase()}</button></p>`;
 }
 
 function groupKey(a, mode) {
@@ -296,7 +312,7 @@ function draw() {
   $("displaying").textContent = `Displaying ${list.length} article${list.length === 1 ? "" : "s"} from ${nSrc} source${nSrc === 1 ? "" : "s"}`;
   document.querySelectorAll("[data-clear]").forEach(b => b.hidden = !state[b.dataset.clear].size);
   $("timeClear").hidden = !state.days && !$("from").value;
-  if (!list.length) { $("list").innerHTML = '<p class="empty">No articles match these filters.</p>'; return; }
+  if (!list.length) { $("list").innerHTML = emptyMessage(); return; }
   const groups = new Map();
   list.forEach(a => { const k = groupKey(a, mode); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(a); });
   let keys = [...groups.keys()];
@@ -307,6 +323,11 @@ function draw() {
   $("list").innerHTML = keys.map(k => (mode === "none" ? "" : `<h2 class="group">${esc(groupLabel(k, mode))}</h2>`)
     + groups.get(k).map(item).join("")).join("");
 }
+
+$("list").addEventListener("click", (e) => {
+  const b = e.target.closest(".widen"); if (!b) return;
+  $("from").value = ""; setDays(+b.dataset.days); draw();
+});
 
 // Broken images fall back to the source-name block.
 $("list").addEventListener("error", (e) => {

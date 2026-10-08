@@ -9,6 +9,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from . import __version__
+from .archive import DEFAULT_KEEP_DAYS, default_path, load_archive, save_archive
 from .classify import Classifier, deduplicate, filter_articles, resolve_ids
 from .config import load_sources, load_taxonomy
 from .feeds import enrich_from_pages, fetch_all, needs_page_lookup
@@ -42,7 +43,7 @@ def build_parser() -> argparse.ArgumentParser:
                                    "  secnews fetch --input last-week.json -c fraud -o fraud.md",
                        formatter_class=argparse.RawDescriptionHelpFormatter)
     when = f.add_argument_group("time window")
-    when.add_argument("--days", type=int, default=7, help="look back this many days (default: 7)")
+    when.add_argument("--days", type=int, default=30, help="look back this many days (default: 30)")
     when.add_argument("--since", type=_date_arg, help="start date YYYY-MM-DD (overrides --days)")
     when.add_argument("--until", type=_date_arg, help="end date YYYY-MM-DD, inclusive")
     when.add_argument("--include-undated", action="store_true", help="keep articles without a publish date")
@@ -63,6 +64,11 @@ def build_parser() -> argparse.ArgumentParser:
     out.add_argument("--no-merge", action="store_true", help="don't merge the same story reported by multiple outlets")
     out.add_argument("--no-page-lookup", "--no-images", dest="no_page_lookup", action="store_true",
                      help="don't open article pages to find missing pictures or expand one-line summaries")
+    out.add_argument("--archive", metavar="JSON",
+                     help="where fetched articles are kept between runs (default: ~/.secnews/archive.json)")
+    out.add_argument("--keep-days", type=int, default=DEFAULT_KEEP_DAYS,
+                     help=f"how long the archive keeps articles (default: {DEFAULT_KEEP_DAYS})")
+    out.add_argument("--no-archive", action="store_true", help="don't read or update the archive")
     out.add_argument("--workers", type=int, default=10, help="parallel downloads (default: 10)")
     out.add_argument("--timeout", type=float, default=20, help="per-feed timeout in seconds (default: 20)")
     out.add_argument("-q", "--quiet", action="store_true", help="suppress progress output")
@@ -80,7 +86,7 @@ def _log(args, msg: str) -> None:
 
 
 def cmd_fetch(args) -> int:
-    sources = load_sources(args.sources_file)
+    all_sources = sources = load_sources(args.sources_file)
     taxonomy = load_taxonomy(args.categories_file)
     try:
         topics = resolve_ids(args.category, taxonomy.topics, "topic")
@@ -117,12 +123,25 @@ def cmd_fetch(args) -> int:
             articles.extend(r.articles)
         _log(args, f"Fetched {len(articles)} articles ({len(results) - len(errors)}/{len(results)} feeds OK)")
 
+    # Feeds only carry recent items, so earlier runs' articles are kept in an archive and merged back in.
+    archive_path = None if (args.input or args.no_archive) else Path(args.archive) if args.archive else default_path()
+    if archive_path:
+        archived = load_archive(archive_path)
+        if archived:
+            _log(args, f"Merged {len(archived)} articles from earlier runs ({archive_path})")
+        articles = archived + articles  # archived first, so their saved pictures/summaries win de-duplication
+
     # Re-tag on every run so edits to categories.json apply to saved JSON too.
-    classifier = Classifier(taxonomy, sources)
+    classifier = Classifier(taxonomy, all_sources)
     for a in articles:
         classifier.classify(a)
-    if not args.no_merge and not args.input:
-        articles = deduplicate(articles)
+    if not args.input:
+        # With --no-merge, still drop exact repeats of the same link (e.g. archived + re-fetched).
+        articles = deduplicate(articles, similarity=2.0 if args.no_merge else 0.7)
+    everything = articles
+    if archive_path and args.type:
+        allowed = {s.name for s in sources}
+        articles = [a for a in articles if a.source in allowed]
 
     now = datetime.now(timezone.utc)
     since = args.since or (now - timedelta(days=args.days))
@@ -145,6 +164,10 @@ def cmd_fetch(args) -> int:
         _log(args, f"Reading {pending} article pages for missing pictures and short summaries…")
         images, summaries = enrich_from_pages(filtered, workers=args.workers, timeout=min(args.timeout, 10))
         _log(args, f"  found {images} pictures, expanded {summaries} summaries")
+
+    if archive_path:
+        kept = save_archive(archive_path, everything, args.keep_days)
+        _log(args, f"Archive now holds {kept} articles from the last {args.keep_days} days")
 
     filters = []
     if topics:

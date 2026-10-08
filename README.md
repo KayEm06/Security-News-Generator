@@ -21,15 +21,19 @@ Optionally install it as a `secnews` command: `pip install .` (or `pipx install 
 
 ## Weekly bulletin workflow
 
-1. **Pull the week once and keep a snapshot**
+1. **Pull the news once and keep a snapshot** (the last 30 days by default)
    ```bash
-   python3 -m secnews fetch --days 7 -o reports/2026-W41.json
+   python3 -m secnews fetch -o reports/2026-W41.json
    ```
 2. **Review interactively:** build the HTML from the snapshot (no re-download) and open it in a browser:
    ```bash
    python3 -m secnews fetch --input reports/2026-W41.json -o reports/2026-W41.html
    ```
-   Click category, industry, location, source and time period filters, or search for actors or products.
+   Click category, industry, location, source and time period filters, or search for actors or products. The page opens on the last 7 days. If a filter finds nothing in that period, the page tells you when the most recent matching article was and offers a button to widen the period.
+
+### Going back further: the archive
+
+News feeds only carry each site's latest items, often just the last few days for busy sites. So every `fetch` also saves what it found to an archive (`~/.secnews/archive.json`) and merges earlier runs back in. Run it at least weekly and history builds up, so you can look back weeks even for quiet industries. The archive keeps 90 days by default (`--keep-days`). Use `--archive PATH` to store it elsewhere, for example a shared drive, or `--no-archive` to skip it. Pictures and summaries looked up from article pages are stored too, so they aren't fetched again.
 3. **Or slice it from the command line:**
    ```bash
    # Vulnerabilities + ransomware only, as Markdown
@@ -60,7 +64,8 @@ Key `fetch` options:
 
 | Option | |
 |---|---|
-| `--days N` / `--since YYYY-MM-DD` / `--until YYYY-MM-DD` | Time window (default: last 7 days) |
+| `--days N` / `--since YYYY-MM-DD` / `--until YYYY-MM-DD` | Time window (default: last 30 days) |
+| `--archive PATH` / `--keep-days N` / `--no-archive` | Where earlier runs are kept (default `~/.secnews/archive.json`), for how long (default 90 days), or skip the archive |
 | `-c, --category` | Topic filter. Repeat it or comma-separate values. Accepts ids, names or prefixes (`vuln`, `fraud`, `phish`) |
 | `-i, --industry` | Industry filter (`healthcare`, `finance`, `charity`, `gov`, …) |
 | `-l, --location` | Location filter (`uk`, `europe`, `north-america`, `asia-pacific`, …). Country names also work and map to their region (`germany` → Europe, `us` → North America) |

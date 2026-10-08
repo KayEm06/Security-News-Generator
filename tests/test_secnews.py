@@ -3,7 +3,7 @@ import io
 import json
 import tempfile
 import unittest
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from secnews.classify import Classifier, deduplicate, filter_articles, normalize_url, resolve_ids
@@ -240,13 +240,44 @@ class CliTests(unittest.TestCase):
         self.sources = self.tmp / "sources.json"
         self.sources.write_text(json.dumps({"sources": feeds}))
 
-    def run_cli(self, *args, pages=False):
+    def run_cli(self, *args, pages=False, archive=None):
         out, err = io.StringIO(), io.StringIO()
-        if args and args[0] == "fetch" and not pages:
-            args = (*args, "--no-page-lookup")  # fixture links point at example.com; keep tests offline
+        if args and args[0] == "fetch":
+            if not pages:
+                args = (*args, "--no-page-lookup")  # fixture links point at example.com; keep tests offline
+            args = (*args, "--archive", str(archive)) if archive else (*args, "--no-archive")
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
             code = main(["--sources-file", str(self.sources), *args])
         return code, out.getvalue(), err.getvalue()
+
+    def test_archive_keeps_articles_between_runs(self):
+        archive = self.tmp / "archive.json"
+        self.sources.write_text(json.dumps({"sources": [{"name": "Outlet A", "url": (FIX / "rss.xml").as_uri()}]}))
+        self.run_cli("fetch", "--since", "2026-09-30", "--keep-days", "36500", "-q", archive=archive)
+        saved = json.loads(archive.read_text())["articles"]
+        self.assertIn("Police arrest members of pig butchering crypto scam ring", [a["title"] for a in saved])
+
+        # Next week the article has dropped out of Outlet A's feed, but the archive still has it.
+        self.sources.write_text(json.dumps({"sources": [{"name": "Lab B", "url": (FIX / "atom.xml").as_uri()}]}))
+        out = self.tmp / "r.json"
+        _, _, err = self.run_cli("fetch", "--since", "2026-09-30", "--keep-days", "36500", "-o", str(out), archive=archive)
+        self.assertIn("Merged", err)
+        titles = [a["title"] for a in json.loads(out.read_text())["articles"]]
+        self.assertIn("Police arrest members of pig butchering crypto scam ring", titles)
+        self.assertIn("LockBit affiliate deploys new ransomware-as-a-service encryptor against manufacturers", titles)
+        self.assertEqual(len(titles), len(set(titles)))  # the re-fetched Ivanti story isn't duplicated
+        ivanti = next(a for a in json.loads(out.read_text())["articles"] if "Ivanti" in a["title"])
+        self.assertEqual(ivanti["also_reported_by"], ["Lab B"])
+
+    def test_archive_prunes_old_articles(self):
+        from secnews.archive import load_archive, save_archive
+        now = datetime.now(timezone.utc)
+        arts = [Article(title=t, link=f"https://x/{t}", source="S", published=now - timedelta(days=d))
+                for t, d in (("new", 1), ("month", 40), ("old", 120))] + [Article(title="undated", link="https://x/u", source="S")]
+        path = self.tmp / "a.json"
+        self.assertEqual(save_archive(path, arts, keep_days=90), 2)
+        self.assertEqual([a.title for a in load_archive(path)], ["new", "month"])
+        self.assertEqual(load_archive(self.tmp / "missing.json"), [])
 
     def test_page_lookup(self):
         desc = ("Attackers breached the council's network and encrypted file servers, forcing staff back to pen "
