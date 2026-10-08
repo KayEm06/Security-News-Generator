@@ -29,7 +29,7 @@ Optionally install it as a `secnews` command: `pip install .` (or `pipx install 
    ```bash
    python3 -m secnews fetch --input reports/2026-W41.json -o reports/2026-W41.html
    ```
-   Click category, industry, location, source and time period filters, or search for actors or products. You can tick articles to shortlist them; **Only selected articles** then shows just your shortlist, and it's kept if you reload the page.
+   Click category, industry, location, source and time period filters, or search for actors or products.
 3. **Or slice it from the command line:**
    ```bash
    # Vulnerabilities + ransomware only, as Markdown

@@ -69,17 +69,12 @@ label.check input { accent-color: var(--navy); margin: 0; }
 /* Main column */
 .displaying { margin: 0; color: var(--maroon-text); font-size: 14.5px; font-weight: 700; font-style: italic; }
 .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; margin-top: 6px; font-size: 12px; color: var(--muted); }
-.actions button { background: none; border: 0; padding: 0; color: var(--navy); font-size: 12px; cursor: pointer; }
-.actions button:hover:not(:disabled) { text-decoration: underline; }
-.actions button:disabled { color: var(--faint); cursor: default; }
 .actions select { border: 1px solid #d0d0d0; border-radius: 0; background: #fff; font-size: 12px; padding: 1px 2px; color: var(--text); }
 h2.group { margin: 6px 0 12px; font-size: 36px; line-height: 1.15; font-weight: 700; color: var(--ink); letter-spacing: -.01em; }
 .item { margin-bottom: 26px; }
 .item h4 { margin: 0; font-size: 14.5px; line-height: 1.3; font-weight: 700; color: var(--ink); display: flex; gap: 7px; align-items: baseline; }
 .item h4 a { text-decoration: none; }
 .item h4 a:hover { text-decoration: underline; }
-.item h4 input { accent-color: var(--navy); margin: 0; position: relative; top: 1px; flex: none; }
-.item.sel h4 a { color: var(--navy); }
 .byline { font-size: 12.5px; margin: 4px 0 6px; line-height: 1.4; }
 .byline .src { color: var(--navy); }
 .byline .date { color: var(--maroon-text); }
@@ -143,7 +138,6 @@ h2.group { margin: 6px 0 12px; font-size: 36px; line-height: 1.15; font-weight: 
       <div class="sec-head"><h3>More</h3></div>
       <input class="search" type="search" id="q" placeholder="Search articles" aria-label="Search titles, summaries and CVEs">
       <label class="check"><input type="checkbox" id="cveOnly"> Only articles mentioning CVEs</label>
-      <label class="check"><input type="checkbox" id="selOnly"> Only selected articles</label>
     </section>
   </aside>
 
@@ -158,9 +152,6 @@ h2.group { margin: 6px 0 12px; font-size: 36px; line-height: 1.15; font-weight: 
         <option value="source">Group by source</option>
         <option value="none">No grouping</option>
       </select>
-      <span id="selCount"></span>
-      <button id="selAll">Select visible</button>
-      <button id="selNone">Clear selection</button>
     </div>
     <div id="list"></div>
   </main>
@@ -173,11 +164,7 @@ const topicName = Object.fromEntries(DATA.topics.map(t => [t.id, t.name]));
 const indName = Object.fromEntries(DATA.industries.map(t => [t.id, t.name]));
 const locName = Object.fromEntries(DATA.locations.map(t => [t.id, t.name]));
 const arts = DATA.articles.map((a, i) => ({ ...a, i, date: a.published ? new Date(a.published) : null }));
-const state = { topics: new Set(), industries: new Set(), locations: new Set(), sources: new Set(), days: 0, selected: new Set() };
-const store = (() => { try { return window.localStorage; } catch (e) { return null; } })();
-const KEY = "secnews-selected:" + DATA.generated;
-try { JSON.parse(store?.getItem(KEY) || "[]").forEach(l => { const a = arts.find(x => x.link === l); if (a) state.selected.add(a.i); }); } catch (e) {}
-const save = () => { try { store?.setItem(KEY, JSON.stringify([...state.selected].map(i => arts[i].link))); } catch (e) {} };
+const state = { topics: new Set(), industries: new Set(), locations: new Set(), sources: new Set(), days: 0 };
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const safeUrl = (u) => /^https?:\/\//i.test(u || "") ? u : "";
@@ -243,7 +230,7 @@ document.querySelectorAll(".nav a").forEach(a => a.addEventListener("click", () 
   sec.classList.remove("flash"); void sec.offsetWidth; sec.classList.add("flash");
   setTimeout(() => (sec.querySelector(".search, .datein") || sec).focus({ preventScroll: true }), 350);
 }));
-["q", "cveOnly", "selOnly", "group"].forEach(id => $(id).addEventListener("input", draw));
+["q", "cveOnly", "group"].forEach(id => $(id).addEventListener("input", draw));
 
 // ---- Filtering, grouping, rendering --------------------------------------
 function visible() {
@@ -257,7 +244,6 @@ function visible() {
     (!from || (a.date && isoDate(a.date) >= from)) &&
     (!cutoff || (a.date && a.date.getTime() >= cutoff)) &&
     (!$("cveOnly").checked || a.cves.length) &&
-    (!$("selOnly").checked || state.selected.has(a.i)) &&
     (!q || (a.title + " " + a.summary + " " + a.cves.join(" ") + " " + a.source).toLowerCase().includes(q)));
 }
 
@@ -297,16 +283,11 @@ function item(a) {
   a.industries.forEach(t => tags.push(`<span class="t">${esc(indName[t])}</span>`));
   a.locations.forEach(t => tags.push(`<span class="t">${esc(locName[t])}</span>`));
   a.cves.forEach(c => tags.push(`<span class="t cve">${esc(c)}</span>`));
-  const sel = state.selected.has(a.i);
-  return `<article class="item${sel ? " sel" : ""}" data-i="${a.i}">
-    <h4><input type="checkbox" ${sel ? "checked" : ""} aria-label="Select for bulletin"><a href="${esc(safeUrl(a.link) || "#")}" target="_blank" rel="noopener noreferrer">${esc(a.title)}</a></h4>
+  return `<article class="item">
+    <h4><a href="${esc(safeUrl(a.link) || "#")}" target="_blank" rel="noopener noreferrer">${esc(a.title)}</a></h4>
     <div class="byline"><span class="src">${esc(a.source)}</span> <span class="date">${niceDate(a.date)}</span>${tags.join("")}</div>
     <div class="body">${thumb(a)}<p class="summary">${esc(a.summary)}</p></div>
   </article>`;
-}
-
-function updateActions() {
-  $("selCount").textContent = `${state.selected.size} selected`;
 }
 
 function draw() {
@@ -315,7 +296,6 @@ function draw() {
   $("displaying").textContent = `Displaying ${list.length} article${list.length === 1 ? "" : "s"} from ${nSrc} source${nSrc === 1 ? "" : "s"}`;
   document.querySelectorAll("[data-clear]").forEach(b => b.hidden = !state[b.dataset.clear].size);
   $("timeClear").hidden = !state.days && !$("from").value;
-  updateActions();
   if (!list.length) { $("list").innerHTML = '<p class="empty">No articles match these filters.</p>'; return; }
   const groups = new Map();
   list.forEach(a => { const k = groupKey(a, mode); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(a); });
@@ -335,17 +315,6 @@ $("list").addEventListener("error", (e) => {
   span.className = "ph"; span.textContent = e.target.dataset.ph || "";
   e.target.replaceWith(span);
 }, true);
-
-$("list").addEventListener("change", (e) => {
-  if (e.target.type !== "checkbox") return;
-  const el = e.target.closest("article"), i = +el.dataset.i;
-  e.target.checked ? state.selected.add(i) : state.selected.delete(i);
-  el.classList.toggle("sel", e.target.checked);
-  save(); updateActions();
-  if ($("selOnly").checked) draw();
-});
-$("selAll").addEventListener("click", () => { visible().forEach(a => state.selected.add(a.i)); save(); draw(); });
-$("selNone").addEventListener("click", () => { state.selected.clear(); save(); draw(); });
 
 draw();
 </script>
