@@ -24,6 +24,7 @@ class Category:
     id: str
     name: str
     keywords: list[str]
+    color: str = ""
 
 
 @dataclass

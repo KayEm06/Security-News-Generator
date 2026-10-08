@@ -7,6 +7,7 @@
     {
       "id": "vulnerabilities",
       "name": "Vulnerabilities & Exploits",
+      "color": "#ea580c",
       "keywords": [
         "vulnerability",
         "vulnerabilities",
@@ -44,6 +45,7 @@
     {
       "id": "ransomware",
       "name": "Ransomware & Extortion",
+      "color": "#dc2626",
       "keywords": [
         "ransomware",
         "ransom",
@@ -72,6 +74,7 @@
     {
       "id": "malware",
       "name": "Malware & Tooling",
+      "color": "#9333ea",
       "keywords": [
         "malware",
         "trojan",
@@ -106,6 +109,7 @@
     {
       "id": "fraud-cybercrime",
       "name": "Fraud & Cybercrime",
+      "color": "#166534",
       "keywords": [
         "fraud",
         "scam",
@@ -152,6 +156,7 @@
     {
       "id": "phishing",
       "name": "Phishing & Social Engineering",
+      "color": "#ca8a04",
       "keywords": [
         "phishing",
         "spear-phishing",
@@ -181,6 +186,7 @@
     {
       "id": "data-breaches",
       "name": "Data Breaches & Leaks",
+      "color": "#db2777",
       "keywords": [
         "data breach",
         "breach",
@@ -210,6 +216,7 @@
     {
       "id": "nation-state",
       "name": "Nation-State & APT",
+      "color": "#78350f",
       "keywords": [
         "APT",
         "nation-state",
@@ -255,6 +262,7 @@
     {
       "id": "supply-chain",
       "name": "Supply Chain & Third Party",
+      "color": "#0d9488",
       "keywords": [
         "supply chain",
         "supply-chain",
@@ -278,6 +286,7 @@
     {
       "id": "cloud-identity",
       "name": "Cloud & Identity",
+      "color": "#38bdf8",
       "keywords": [
         "cloud",
         "AWS",
@@ -309,6 +318,7 @@
     {
       "id": "ai-security",
       "name": "AI & Emerging Tech",
+      "color": "#6366f1",
       "keywords": [
         "AI",
         "artificial intelligence",
@@ -334,6 +344,7 @@
     {
       "id": "policy-regulation",
       "name": "Policy, Regulation & Legal",
+      "color": "#64748b",
       "keywords": [
         "regulation",
         "regulator",
@@ -369,6 +380,7 @@
     {
       "id": "ics-ot",
       "name": "ICS / OT & Critical Infrastructure",
+      "color": "#172554",
       "keywords": [
         "ICS",
         "SCADA",

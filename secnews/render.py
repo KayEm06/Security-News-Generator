@@ -134,7 +134,8 @@ def to_html(articles: list[Article], taxonomy: Taxonomy, meta: dict) -> str:
     data = {
         "period": _period(meta),
         "generated": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
-        "topics": [{"id": t.id, "name": t.name} for t in taxonomy.topics] + [{"id": "general", "name": "General"}],
+        "topics": [{"id": t.id, "name": t.name, "color": t.color} for t in taxonomy.topics]
+        + [{"id": "general", "name": "General", "color": "#94a3b8"}],
         "industries": [{"id": i.id, "name": i.name} for i in taxonomy.industries],
         "locations": [{"id": l.id, "name": l.name} for l in taxonomy.locations],
         "errors": meta.get("errors", {}),

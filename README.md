@@ -88,7 +88,7 @@ Tagging is keyword-based. Keywords are matched as whole words or phrases; a matc
 Both config files are plain JSON. Edit them in place (`secnews/data/`) or pass your own copies with `--sources-file` / `--categories-file`.
 
 - **`sources.json`**: add a feed with `{"name": "...", "url": "https://.../feed", "type": "news"}`. Add `"categories": ["vulnerabilities"]` or `"locations": ["uk-ireland"]` to tag every article from that source, or `"enabled": false` to pause it. RSS 2.0, RSS 1.0/RDF and Atom are all supported.
-- **`categories.json`**: add keywords, new topics, industries or locations. For example, to filter by a single country, add a location entry with just that country's keywords. Changes also apply to saved JSON snapshots, because `--input` re-tags articles on every run.
+- **`categories.json`**: add keywords, new topics, industries or locations. For example, to filter by a single country, add a location entry with just that country's keywords. Each topic's `"color"` (a hex code such as `"#166534"`) sets its colour in the HTML report. Very dark colours are shown as solid tags with white text. Changes also apply to saved JSON snapshots, because `--input` re-tags articles on every run.
 
 Run `secnews sources --check` after changing feeds; some publishers change feed URLs or block unknown clients from time to time.
 

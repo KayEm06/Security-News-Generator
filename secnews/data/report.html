@@ -50,7 +50,7 @@ input[type=search], input[type=date], select { width: 100%; padding: 9px 12px; b
 input[type=search]:focus, input[type=date]:focus, select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .chip:focus-visible, .btn:focus-visible, button.link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--text); border-radius: var(--pill); padding: 5px 10px; font-size: 13px; font-weight: 500; cursor: pointer; transition: background .15s, border-color .15s, color .15s; }
+.chip { display: inline-flex; align-items: center; gap: 6px; text-align: left; border: 1px solid var(--line); background: var(--bg); color: var(--text); border-radius: var(--pill); padding: 5px 10px; font-size: 13px; font-weight: 500; cursor: pointer; transition: background .15s, border-color .15s, color .15s; }
 .chip::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--c, var(--faint)); flex: none; }
 .chip:hover { border-color: var(--faint); }
 .chip[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
@@ -85,7 +85,8 @@ article h4 a:hover { color: var(--accent); }
 .meta .src { color: var(--text); font-weight: 600; }
 .summary { font-size: 14.5px; margin: 0; color: var(--text); overflow-wrap: anywhere; max-width: 80ch; }
 .tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
-.tag { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 500; line-height: 1; padding: 5px 10px; border-radius: var(--pill); background: color-mix(in srgb, var(--c, var(--accent)) 10%, white); color: color-mix(in srgb, var(--c, var(--accent)) 85%, black); }
+.tag { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 500; line-height: 1; padding: 5px 10px; border-radius: var(--pill); background: color-mix(in srgb, var(--c, var(--accent)) 14%, white); color: color-mix(in srgb, var(--c, var(--accent)) 70%, black); }
+.tag.solid { background: var(--c); color: #fff; }
 .tag.ind { background: var(--line-soft); color: var(--text); }
 .tag.loc { background: var(--bg); border: 1px solid var(--line); color: var(--muted); padding: 4px 9px; }
 .tag.loc::before { content: ""; width: 6px; height: 6px; border-radius: 50%; border: 1.5px solid currentColor; }
@@ -183,8 +184,15 @@ $("stats").innerHTML = [
   [arts.filter(a => a.also_reported_by.length).length, "Multi-outlet stories"],
 ].map(([n, l]) => `<div class="stat"><b>${n}</b><span>${l}</span></div>`).join("");
 // One colour per topic, used for chip/card/group strips.
+// Colours come from categories.json; the palette only covers topics without one.
 const PALETTE = ["#4f46e5", "#e11d48", "#7c3aed", "#0d9488", "#2563eb", "#db2777", "#d97706", "#0891b2", "#65a30d", "#9333ea", "#475569", "#059669", "#64748b"];
-const topicColor = Object.fromEntries(DATA.topics.map((t, i) => [t.id, PALETTE[i % PALETTE.length]]));
+const topicColor = Object.fromEntries(DATA.topics.map((t, i) => [t.id, t.color || PALETTE[i % PALETTE.length]]));
+// Very dark colours wash out as pale tints, so their tags are drawn solid with white text.
+const isDark = (hex) => {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex || ""); if (!m) return false;
+  const [r, g, b] = [0, 2, 4].map(i => parseInt(m[1].slice(i, i + 2), 16) / 255);
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b < 0.32;
+};
 
 const errs = Object.entries(DATA.errors || {});
 if (errs.length) {
@@ -256,7 +264,7 @@ function groupOrder(mode) {
 }
 
 function card(a) {
-  const tags = a.topics.filter(t => t !== "general").map(t => `<span class="tag" style="--c:${topicColor[t]}">${esc(topicName[t])}</span>`)
+  const tags = a.topics.filter(t => t !== "general").map(t => `<span class="tag${isDark(topicColor[t]) ? " solid" : ""}" style="--c:${topicColor[t]}">${esc(topicName[t])}</span>`)
     .concat(a.industries.map(t => `<span class="tag ind">${esc(indName[t])}</span>`))
     .concat(a.locations.map(t => `<span class="tag loc">${esc(locName[t])}</span>`))
     .concat(a.cves.map(c => `<span class="tag cve">${esc(c)}</span>`));
