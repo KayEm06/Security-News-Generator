@@ -35,7 +35,7 @@ a { color: inherit; }
 
 /* ---- Section navigation ---- */
 .nav { background: var(--navy); position: sticky; top: 0; z-index: 20; }
-.nav .wrap { display: flex; align-items: stretch; overflow-x: auto; scrollbar-width: none; }
+.nav .wrap { display: flex; align-items: stretch; overflow-x: auto; scrollbar-width: none; position: relative; }
 .nav .wrap::-webkit-scrollbar { display: none; }
 .nav a { color: #fff; text-decoration: none; font-size: 14px; font-weight: 500; line-height: 40px; padding: 0 14px; white-space: nowrap; border-bottom: 3px solid transparent; }
 .nav a:first-child { padding-left: 0; }
@@ -480,7 +480,11 @@ function renderNav(r, q) {
     + topics.filter(t => counts[t.id] && t.id !== "general").map(t => `<a href="#/section/${t.id}"${cur("section", t.id)}>${esc(t.name)}</a>`).join("")
     + `<span class="spacer"></span><a href="#/saved"${cur("saved")}>Saved<span class="count">${Object.keys(saved).length}</span></a>`
     + `<a href="#/cve"${cur("cve")}>CVE Watch${newHits ? `<span class="pill" title="New since your last visit">${newHits}</span>` : ""}</a>`;
-  document.querySelector(".nav [aria-current]")?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  // Keep the current section visible in the (horizontally scrolling) bar without moving the page itself.
+  const tab = document.querySelector(".nav [aria-current]"), bar = $("sections");
+  if (tab && (tab.offsetLeft < bar.scrollLeft || tab.offsetLeft + tab.offsetWidth > bar.scrollLeft + bar.clientWidth)) {
+    bar.scrollLeft = tab.offsetLeft - 16;
+  }
 }
 
 // ---- Live strip: newest stories, rotating ------------------------------------------------------------
@@ -631,6 +635,20 @@ $("q").addEventListener("input", () => { clearTimeout(searchTimer); searchTimer 
 $("q").addEventListener("keydown", (e) => { if (e.key === "Escape") { $("q").value = ""; render(); } });
 window.addEventListener("hashchange", () => { $("q").value = ""; render(); window.scrollTo({ top: 0 }); });
 if (matchMedia("(min-width: 961px)").matches) $("refine").open = true;
+
+// When the site is hosted (e.g. GitHub Pages) and rebuilt on a schedule, tell readers with the page open.
+if (/^https?:$/.test(location.protocol)) {
+  setInterval(async () => {
+    try {
+      const html = await (await fetch(location.pathname, { cache: "no-store" })).text();
+      const m = html.match(/"generated":\s*"([^"]+)"/);
+      if (m && m[1] !== DATA.generated && !$("fresh")) {
+        document.querySelector(".live .wrap").insertAdjacentHTML("beforeend",
+          '<button id="fresh" class="widen" style="margin:0 0 0 auto;flex:none" onclick="location.reload()">New stories available · Refresh</button>');
+      }
+    } catch (e) { /* offline: try again next time */ }
+  }, 10 * 60 * 1000);
+}
 
 const nSources = new Set(arts.map(a => a.source)).size;
 $("foot").textContent = `${arts.length} stories from ${nSources} sources`;

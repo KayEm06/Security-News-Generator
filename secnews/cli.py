@@ -92,9 +92,10 @@ def build_parser() -> argparse.ArgumentParser:
                                    "  secnews briefing -o briefing.html          # preview it in a browser\n"
                                    "  secnews briefing --send                    # email everyone in the subscriber list\n"
                                    "  secnews briefing --send --to me@example.com\n\n"
-                                   "Sending uses these environment variables:\n"
-                                   "  SECNEWS_SMTP_HOST, SECNEWS_SMTP_PORT (587), SECNEWS_SMTP_USER, SECNEWS_SMTP_PASSWORD,\n"
-                                   "  SECNEWS_SMTP_FROM, SECNEWS_SMTP_SECURITY (starttls | ssl | none)",
+                                   "Set up sending once with 'secnews email setup'. Environment variables override it\n"
+                                   "(useful for scheduled jobs): SECNEWS_SMTP_HOST, SECNEWS_SMTP_PORT (587),\n"
+                                   "SECNEWS_SMTP_USER, SECNEWS_SMTP_PASSWORD, SECNEWS_SMTP_FROM,\n"
+                                   "SECNEWS_SMTP_SECURITY (starttls | ssl | none)",
                        formatter_class=argparse.RawDescriptionHelpFormatter)
     b.add_argument("--hours", type=int, default=24, help="stories from the last N hours (default: 24)")
     b.add_argument("--max", type=int, help="maximum stories (default: briefing_max_stories in site.json)")
@@ -102,6 +103,14 @@ def build_parser() -> argparse.ArgumentParser:
     b.add_argument("--send", action="store_true", help="email it to the subscriber list (or --to)")
     b.add_argument("--to", action="append", metavar="EMAIL", help="send to these addresses instead of the subscriber list")
     b.add_argument("--subscribers", metavar="FILE", help="subscriber list (default: ~/.secnews/subscribers.txt)")
+
+    e = sub.add_parser("email", help="set up and test sending email (for the daily briefing)",
+                       description="  secnews email setup                 # guided set-up, then sends a test email\n"
+                                   "  secnews email test --to me@example.com\n"
+                                   "  secnews email show                  # current settings (password hidden)",
+                       formatter_class=argparse.RawDescriptionHelpFormatter)
+    e.add_argument("action", choices=["setup", "test", "show"])
+    e.add_argument("--to", metavar="EMAIL", help="where to send the test email (default: the sending address)")
 
     m = sub.add_parser("subscribers", help="manage the daily briefing subscriber list")
     m.add_argument("action", choices=["list", "add", "remove"])
@@ -282,7 +291,7 @@ def cmd_briefing(args) -> int:
     try:
         settings = bf.smtp_settings()
     except bf.SmtpConfigError as e:
-        print(f"error: email isn't configured: {e}. See 'secnews briefing -h'.", file=sys.stderr)
+        print(f"error: email isn't set up: {e}.", file=sys.stderr)
         return 2
     subject = f"{title}: {now.strftime('%d %b %Y')}"
     failed = bf.send(recipients, subject, html_body, bf.build_text(stories, title, now), settings)
@@ -290,6 +299,95 @@ def cmd_briefing(args) -> int:
     for addr in failed:
         print(f"  ✗ could not send to {addr}", file=sys.stderr)
     return 1 if failed and len(failed) == len(recipients) else 0
+
+
+def _ask(prompt: str, default: str = "") -> str:
+    answer = input(f"{prompt}{f' [{default}]' if default else ''}: ").strip()
+    return answer or default
+
+
+def _send_test(bf, to: str) -> int:
+    try:
+        settings = bf.smtp_settings()
+    except bf.SmtpConfigError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
+    now = datetime.now(timezone.utc)
+    html_body = ("<p>This is a test from <b>secnews</b>. If you can read this, the daily briefing can be sent "
+                 "from this account.</p>")
+    try:
+        failed = bf.send([to], "secnews test email", html_body, "This is a test from secnews. Email is working.", settings)
+    except Exception as exc:  # show the server's reason (wrong password, SMTP disabled, blocked port...)
+        print(f"✗ Couldn't send: {exc.__class__.__name__}: {exc}", file=sys.stderr)
+        tip = next((p["tip"] for p in bf.PROVIDERS.values() if p["host"] == settings["host"] and p["tip"]), "")
+        if tip:
+            print(f"  Tip: {tip}", file=sys.stderr)
+        return 1
+    if failed:
+        print(f"✗ The server refused the address {to}", file=sys.stderr)
+        return 1
+    print(f"✓ Test email sent to {to} at {now.strftime('%H:%M UTC')}. Check the inbox (and spam folder).")
+    return 0
+
+
+def cmd_email(args) -> int:
+    from . import briefing as bf
+    import getpass
+
+    path = bf.email_config_path()
+    if args.action == "show":
+        cfg = bf.load_email_config()
+        if not cfg:
+            print(f"Not set up yet ({path} doesn't exist). Run: secnews email setup")
+            return 0
+        for k in ("host", "port", "security", "user", "sender"):
+            print(f"{k:<9} {cfg.get(k, '')}")
+        print(f"password  {'(saved)' if cfg.get('password') else '(not saved: uses SECNEWS_SMTP_PASSWORD)'}")
+        print(f"file      {path}")
+        return 0
+    if args.action == "test":
+        try:
+            sender = bf.smtp_settings()["sender"]
+        except bf.SmtpConfigError as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 2
+        return _send_test(bf, args.to or sender)
+
+    print("Set up email for the daily briefing. Press Enter to accept the [default].\n")
+    keys = list(bf.PROVIDERS)
+    for n, k in enumerate(keys, 1):
+        print(f"  {n}. {bf.PROVIDERS[k]['label']}")
+    choice = _ask("\nWhich email provider do you use? (number)", "1")
+    try:
+        provider = bf.PROVIDERS[keys[int(choice) - 1]]
+    except (ValueError, IndexError):
+        print("error: pick one of the numbers above", file=sys.stderr)
+        return 2
+    if provider["tip"]:
+        print(f"\nNote: {provider['tip']}")
+    old = bf.load_email_config()
+    cfg = {"host": provider["host"] or _ask("SMTP server (e.g. mail.example.com)", old.get("host", ""))}
+    if provider["host"]:
+        cfg["port"], cfg["security"] = provider["port"], provider["security"]
+    else:
+        cfg["port"] = int(_ask("Port", str(old.get("port", 587))))
+        cfg["security"] = _ask("Security: starttls, ssl or none", old.get("security", "starttls"))
+    cfg["user"] = _ask("Email address you sign in with", old.get("user", ""))
+    cfg["sender"] = _ask("Send the briefing from (address people will see)", old.get("sender") or cfg["user"])
+    password = getpass.getpass("Password or app password (typing is hidden): ")
+    if not password and old.get("password"):
+        password = old["password"]
+    store = _ask(f"Save the password in {path}? It's readable only by your user account (y/n)", "y").lower()
+    if store.startswith("y"):
+        cfg["password"] = password
+    else:
+        print("Not saved. Set SECNEWS_SMTP_PASSWORD in your environment before sending.")
+        import os
+        os.environ["SECNEWS_SMTP_PASSWORD"] = password  # still usable for the test below
+    saved_to = bf.save_email_config(cfg)
+    print(f"\nSaved settings to {saved_to}")
+    to = _ask("Send a test email to", cfg["sender"])
+    return _send_test(bf, to)
 
 
 def cmd_subscribers(args) -> int:
@@ -358,6 +456,6 @@ def cmd_categories(args) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    commands = {"fetch": cmd_fetch, "briefing": cmd_briefing, "subscribers": cmd_subscribers,
+    commands = {"fetch": cmd_fetch, "briefing": cmd_briefing, "email": cmd_email, "subscribers": cmd_subscribers,
                 "sources": cmd_sources, "categories": cmd_categories}
     return commands[args.command](args)

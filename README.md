@@ -37,9 +37,18 @@ Optionally install it as a `secnews` command: `pip install .` (or `pipx install 
 - **Sections:** the navy bar has Latest plus one section per category. **Saved** and **CVE Watch** sit on the right.
 - **Search articles** (top right) searches titles, summaries, sources and CVE IDs. Press Esc to clear it.
 - **LIVE** cycles through the five newest stories. Hover to pause it.
-- **Save** on any story keeps it in your browser's Saved section. Saved stories stay there when you build next week's report, as long as you open it in the same browser.
+- **Save** on any story keeps it in your browser's Saved section (see *How saved stories are kept* below).
 - **CVE Watch:** add a CVE ID (`CVE-2026-1281`) or a product or vendor name (`Fortinet`). Matching stories are flagged "Watching", the CVE Watch section lists them, and the nav shows how many are new since you last looked. **Trending CVEs** lists the most-reported CVEs, each with a one-click Watch button.
 - **Refine stories** (right-hand column) filters every section by industry, location, source, time period, or CVE mentions only.
+
+### How saved stories are kept
+
+Saved stories and your CVE watchlist are stored in the browser, not in the report file. Each saved story keeps its own copy of the title, link, picture and summary, so it stays in Saved even after it has dropped out of newer reports. They carry over to a new digest as long as you:
+
+- **open it in the same browser on the same computer**, and
+- **write the new digest to the same file** (for example always `reports/digest.html`). Chrome and Edge share saved stories between all report files, but Firefox and Safari keep them separate per file.
+
+Clearing your browser data, or using a private window, removes them. If you use the hosted version (see *Automatic updates*), the site always lives at the same web address, so saved stories persist naturally. They're still per browser, though, so each colleague has their own.
 
 ## Daily briefing email
 
@@ -51,7 +60,21 @@ python3 -m secnews subscribers add jo@example.com  # manage the list (~/.secnews
 python3 -m secnews briefing --send                 # email everyone on the list
 ```
 
-Sending uses your organisation's email server or any SMTP service. Set these environment variables:
+### Setting up email (once)
+
+```bash
+python3 -m secnews email setup
+```
+
+This asks which provider you use (Microsoft 365, Gmail, Outlook.com or other), your email address and password, then sends you a test email. The settings are saved in `~/.secnews/email.json`, which only your user account can read. You can choose not to save the password and set `SECNEWS_SMTP_PASSWORD` instead. `secnews email test` re-sends the test, and `secnews email show` shows the settings with the password hidden.
+
+Provider notes:
+- **Gmail / Google Workspace:** you need an *App Password* (Google Account › Security › 2-Step Verification › App passwords). Your normal password won't work.
+- **Microsoft 365 (work account):** your IT team may need to enable *Authenticated SMTP* for the mailbox. If the test says `SmtpClientAuthentication is disabled`, that's the fix.
+- **Outlook.com / Hotmail:** Microsoft is phasing out password sign-in for personal accounts, so this may be refused. Use another account if so.
+- For a team, a dedicated mailbox such as `security-news@yourorg.com` is best.
+
+Environment variables override the saved settings, which is how scheduled jobs and GitHub Actions use it:
 
 | Variable | Example |
 |---|---|
@@ -61,11 +84,56 @@ Sending uses your organisation's email server or any SMTP service. Set these env
 | `SECNEWS_SMTP_FROM` | `security-news@yourorg.com` (defaults to the user) |
 | `SECNEWS_SMTP_SECURITY` | `starttls` (default), `ssl` or `none` |
 
-Each subscriber gets their own copy, so nobody sees the list. To send it every morning, schedule `python3 -m secnews briefing --send` with cron (macOS/Linux) or Task Scheduler (Windows).
+Each subscriber gets their own copy, so nobody sees the list.
 
 **The sign-up box on the site.** A page opened from your computer can't store a mailing list itself, so set one of these in `secnews/data/site.json`:
 - `subscribe_email`: your own address. The box opens a pre-filled email to you, and you add the person with `secnews subscribers add`.
 - `subscribe_url`: a newsletter service's sign-up endpoint that accepts a posted `email` field, such as Buttondown, Mailchimp, Formspree or a Microsoft/Google Form. Use this if you'd rather a service manage the list and send the emails.
+
+## Automatic updates
+
+There are two ways to keep the site fresh and send the briefing every morning without running anything by hand.
+
+### Option A: GitHub Actions (runs in the cloud, even when your computer is off)
+
+The repository includes two workflows. Scheduled runs only start once they're on the `main` branch, so merge the pull request first.
+
+| Workflow | When | What it does |
+|---|---|---|
+| **Update news site** (`update-site.yml`) | every 4 hours | fetches all sources, keeps the archive between runs, builds the site, and keeps a downloadable copy (*Actions › run › Artifacts › news-site*) |
+| **Daily briefing email** (`daily-briefing.yml`) | 06:47 UTC every day | sends the briefing to everyone on the subscriber list |
+
+Set-up, in the repository on GitHub:
+
+1. **Email:** *Settings › Secrets and variables › Actions › New repository secret*. Add `SECNEWS_SMTP_HOST`, `SECNEWS_SMTP_USER` and `SECNEWS_SMTP_PASSWORD`, plus `SECNEWS_SMTP_FROM` if different. Add `SECNEWS_SUBSCRIBERS` with one email address per line. It's a secret, so the list isn't visible in the repository.
+2. **Publish the site as a web page (optional):** GitHub Pages can publish the site at an address like `https://<you>.github.io/Security-News-Generator/`. It needs either a **public** repository or a paid plan (GitHub Pro) for a private one. The published page can be opened by anyone with the link. To turn it on:
+   - *Settings › Pages › Source: GitHub Actions*
+   - *Settings › Secrets and variables › Actions › Variables › New variable*: `PUBLISH_SITE` = `true`
+3. Run each workflow once by hand (*Actions › workflow › Run workflow*) to check it works.
+
+Notes:
+- **Free minutes:** a private repository gets 2,000 free Actions minutes a month, and these workflows use roughly 800.
+- **Open pages update themselves:** a published site that someone has open shows a *New stories available* button when a newer version is published.
+- **Inactive public repos:** GitHub pauses scheduled workflows in public repositories after 60 days without any commits. Re-enable them from the Actions tab.
+
+### Option B: on your own computer
+
+Schedule the commands with your computer's scheduler. Use the full path to the folder you cloned.
+
+**macOS / Linux** (`crontab -e`):
+```cron
+# rebuild the site every 4 hours, send the briefing at 07:45 on weekdays
+0 */4 * * *  cd ~/Security-News-Generator && python3 -m secnews fetch -q -o reports/digest.html
+45 7 * * 1-5 cd ~/Security-News-Generator && python3 -m secnews briefing -q --send
+```
+
+**Windows** (Command Prompt):
+```bat
+schtasks /create /tn "secnews site" /sc hourly /mo 4 /tr "cmd /c cd /d %USERPROFILE%\Security-News-Generator && python -m secnews fetch -q -o reports\digest.html"
+schtasks /create /tn "secnews briefing" /sc weekly /d MON,TUE,WED,THU,FRI /st 07:45 /tr "cmd /c cd /d %USERPROFILE%\Security-News-Generator && python -m secnews briefing -q --send"
+```
+
+Your computer has to be on at those times. Keep the digest path the same so saved stories carry over.
 
 ## Weekly bulletin workflow
 
@@ -112,6 +180,7 @@ python3 -m secnews fetch --backfill 5 -o reports/digest.html
 |---|---|
 | `secnews fetch` | Fetch (or `--input` a saved JSON), tag, filter, write a report. See `secnews fetch -h`. |
 | `secnews briefing` | Build the daily briefing email; `--send` emails it. See `secnews briefing -h`. |
+| `secnews email setup\|test\|show` | Set up sending email, send a test, or show the settings. |
 | `secnews subscribers list\|add\|remove` | Manage the briefing's subscriber list. |
 | `secnews categories` | List topic and industry ids you can filter on. |
 | `secnews sources` | List configured feeds. Add `--check` to test every feed and show item counts. |

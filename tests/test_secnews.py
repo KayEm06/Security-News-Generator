@@ -473,10 +473,53 @@ class CliTests(unittest.TestCase):
     def test_briefing_send_needs_config(self):
         from unittest import mock
         self._recent_feed()
-        with mock.patch.dict("os.environ", {}, clear=True):
+        with mock.patch.dict("os.environ", {"SECNEWS_EMAIL_CONFIG": str(self.tmp / "none.json")}, clear=True):
             code, _, err = self.run_cli("briefing", "--send", "--to", "me@example.com")
         self.assertEqual(code, 2)
-        self.assertIn("SECNEWS_SMTP_HOST", err)
+        self.assertIn("secnews email setup", err)
+
+    def test_email_setup_wizard(self):
+        import os
+        import stat
+        from unittest import mock
+        cfg_path = self.tmp / "email.json"
+        answers = iter(["2", "me@gmail.com", "", "y", "boss@example.com"])  # Gmail, user, sender=default, save pw, test to
+        with mock.patch.dict("os.environ", {"SECNEWS_EMAIL_CONFIG": str(cfg_path)}, clear=True), \
+             mock.patch("builtins.input", lambda _: next(answers)), \
+             mock.patch("getpass.getpass", lambda _: "app-pass-123"), \
+             mock.patch("smtplib.SMTP") as smtp:
+            server = smtp.return_value.__enter__.return_value
+            code, out, err = self.run_cli("email", "setup")
+            self.assertEqual(code, 0, err)
+            smtp.assert_called_with("smtp.gmail.com", 587, timeout=30)
+            server.login.assert_called_once_with("me@gmail.com", "app-pass-123")
+            self.assertEqual(server.send_message.call_args.args[0]["To"], "boss@example.com")
+            self.assertIn("Test email sent", out)
+            cfg = json.loads(cfg_path.read_text())
+            self.assertEqual((cfg["host"], cfg["sender"], cfg["password"]), ("smtp.gmail.com", "me@gmail.com", "app-pass-123"))
+            if os.name == "posix":
+                self.assertEqual(stat.S_IMODE(cfg_path.stat().st_mode), 0o600)
+            # The saved settings are what briefing --send uses.
+            self._recent_feed()
+            code, _, err = self.run_cli("briefing", "--send", "--to", "team@example.com")
+            self.assertEqual(code, 0, err)
+            code, out, _ = self.run_cli("email", "show")
+            self.assertIn("(saved)", out)
+            self.assertNotIn("app-pass-123", out)
+
+    def test_email_test_reports_server_errors(self):
+        import smtplib
+        from unittest import mock
+        cfg_path = self.tmp / "email.json"
+        cfg_path.write_text(json.dumps({"host": "smtp.office365.com", "port": 587, "security": "starttls",
+                                        "user": "me@org.com", "sender": "me@org.com", "password": "x"}))
+        with mock.patch.dict("os.environ", {"SECNEWS_EMAIL_CONFIG": str(cfg_path)}, clear=True), \
+             mock.patch("smtplib.SMTP") as smtp:
+            smtp.return_value.__enter__.return_value.login.side_effect = smtplib.SMTPAuthenticationError(535, b"SmtpClientAuthentication is disabled")
+            code, _, err = self.run_cli("email", "test")
+        self.assertEqual(code, 1)
+        self.assertIn("SmtpClientAuthentication is disabled", err)
+        self.assertIn("Authenticated SMTP", err)  # provider tip
 
     def test_subscribers(self):
         subs = self.tmp / "s.txt"

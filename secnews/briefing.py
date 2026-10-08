@@ -109,19 +109,62 @@ class SmtpConfigError(RuntimeError):
     pass
 
 
+# Common providers, offered by `secnews email setup`.
+PROVIDERS = {
+    "office365": {"label": "Microsoft 365 / Office 365 work account", "host": "smtp.office365.com", "port": 587, "security": "starttls",
+                  "tip": "Your IT team may need to enable 'Authenticated SMTP' for this mailbox."},
+    "gmail": {"label": "Gmail / Google Workspace", "host": "smtp.gmail.com", "port": 587, "security": "starttls",
+              "tip": "Use an App Password (Google Account > Security > App passwords), not your normal password."},
+    "outlook": {"label": "Outlook.com / Hotmail", "host": "smtp-mail.outlook.com", "port": 587, "security": "starttls",
+                "tip": "Microsoft is phasing out password sign-in for personal accounts; if it's refused, use another provider."},
+    "other": {"label": "Other (enter the server details yourself)", "host": "", "port": 587, "security": "starttls", "tip": ""},
+}
+
+
+def email_config_path() -> Path:
+    return Path(os.environ.get("SECNEWS_EMAIL_CONFIG") or Path.home() / ".secnews" / "email.json")
+
+
+def load_email_config(path: Path | None = None) -> dict:
+    import json
+    try:
+        return json.loads((path or email_config_path()).read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return {}
+
+
+def save_email_config(cfg: dict, path: Path | None = None) -> Path:
+    import json
+    path = path or email_config_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    # Created owner-only (0600) because it may hold the mailbox password.
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        json.dump(cfg, f, indent=2)
+    try:
+        os.chmod(path, 0o600)
+    except OSError:  # e.g. Windows, where the user profile folder is already private
+        pass
+    return path
+
+
 def smtp_settings() -> dict:
-    env = os.environ
+    """Email settings from ~/.secnews/email.json, overridden by SECNEWS_SMTP_* environment variables."""
+    cfg, env = load_email_config(), os.environ
+    get = lambda key, env_name, default="": env.get(env_name) or str(cfg.get(key) or default)  # noqa: E731
     s = {
-        "host": env.get("SECNEWS_SMTP_HOST", ""),
-        "port": int(env.get("SECNEWS_SMTP_PORT", "587")),
-        "user": env.get("SECNEWS_SMTP_USER", ""),
-        "password": env.get("SECNEWS_SMTP_PASSWORD", ""),
-        "sender": env.get("SECNEWS_SMTP_FROM") or env.get("SECNEWS_SMTP_USER", ""),
-        "security": env.get("SECNEWS_SMTP_SECURITY", "starttls").lower(),  # starttls | ssl | none
+        "host": get("host", "SECNEWS_SMTP_HOST"),
+        "port": int(get("port", "SECNEWS_SMTP_PORT", 587)),
+        "user": get("user", "SECNEWS_SMTP_USER"),
+        "password": get("password", "SECNEWS_SMTP_PASSWORD"),
+        "security": get("security", "SECNEWS_SMTP_SECURITY", "starttls").lower(),  # starttls | ssl | none
     }
+    s["sender"] = get("sender", "SECNEWS_SMTP_FROM") or s["user"]
     missing = [k for k in ("host", "sender") if not s[k]]
     if missing:
-        raise SmtpConfigError("set " + " and ".join(f"SECNEWS_SMTP_{'FROM' if k == 'sender' else k.upper()}" for k in missing))
+        raise SmtpConfigError("no email server set up. Run 'secnews email setup' (or set SECNEWS_SMTP_HOST and SECNEWS_SMTP_FROM)")
+    if s["user"] and not s["password"]:
+        raise SmtpConfigError("no password. Run 'secnews email setup' again or set SECNEWS_SMTP_PASSWORD")
     return s
 
 
