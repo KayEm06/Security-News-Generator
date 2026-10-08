@@ -72,7 +72,6 @@ label.check input { accent-color: var(--navy); margin: 0; }
 .actions button { background: none; border: 0; padding: 0; color: var(--navy); font-size: 12px; cursor: pointer; }
 .actions button:hover:not(:disabled) { text-decoration: underline; }
 .actions button:disabled { color: var(--faint); cursor: default; }
-.actions .primary { font-weight: 700; color: var(--maroon-text); }
 .actions select { border: 1px solid #d0d0d0; border-radius: 0; background: #fff; font-size: 12px; padding: 1px 2px; color: var(--text); }
 h2.group { margin: 6px 0 12px; font-size: 36px; line-height: 1.15; font-weight: 700; color: var(--ink); letter-spacing: -.01em; }
 .item { margin-bottom: 26px; }
@@ -95,11 +94,7 @@ h2.group { margin: 6px 0 12px; font-size: 36px; line-height: 1.15; font-weight: 
 .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .thumb .ph { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; padding: 8px; text-align: center; color: #fff; font-weight: 700; font-size: 13px; letter-spacing: .06em; text-transform: uppercase; line-height: 1.2; }
 .summary { margin: 0; font-size: 12.5px; line-height: 15px; color: var(--text); overflow-wrap: anywhere; }
-.errors { font-size: 12px; color: var(--maroon-text); margin: 8px 0 4px; }
-.errors summary { cursor: pointer; font-weight: 600; }
 .empty { font-size: 14px; color: var(--muted); padding: 24px 0; }
-.toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--navy); color: #fff; padding: 8px 14px; font-size: 13px; font-weight: 600; opacity: 0; transition: opacity .2s; pointer-events: none; }
-.toast.show { opacity: 1; }
 </style>
 </head>
 <body>
@@ -166,14 +161,10 @@ h2.group { margin: 6px 0 12px; font-size: 36px; line-height: 1.15; font-weight: 
       <span id="selCount"></span>
       <button id="selAll">Select visible</button>
       <button id="selNone">Clear selection</button>
-      <button class="primary" id="copy">Copy as Markdown</button>
-      <button id="download">Download .md</button>
     </div>
-    <div id="errors"></div>
     <div id="list"></div>
   </main>
 </div>
-<div class="toast" id="toast" role="status"></div>
 
 <script>
 const DATA = /*__DATA__*/null;
@@ -197,11 +188,6 @@ const niceDate = (d) => d ? `${String(d.getUTCDate()).padStart(2, "0")} ${MONTHS
 // Category colours come from categories.json; the palette only covers topics without one.
 const PALETTE = ["#4f46e5", "#e11d48", "#7c3aed", "#0d9488", "#2563eb", "#db2777", "#d97706", "#0891b2", "#65a30d", "#9333ea", "#475569", "#059669", "#64748b"];
 const topicColor = Object.fromEntries(DATA.topics.map((t, i) => [t.id, t.color || PALETTE[i % PALETTE.length]]));
-
-const errs = Object.entries(DATA.errors || {});
-if (errs.length) {
-  $("errors").innerHTML = `<details class="errors"><summary>${errs.length} source(s) could not be fetched</summary><ul>${errs.map(([s, e]) => `<li><b>${esc(s)}</b>: ${esc(e)}</li>`).join("")}</ul></details>`;
-}
 
 // ---- Sidebar option lists ------------------------------------------------
 const sourceItems = [...new Set(arts.map(a => a.source))].sort().map(s => ({ id: s, name: s }));
@@ -321,7 +307,6 @@ function item(a) {
 
 function updateActions() {
   $("selCount").textContent = `${state.selected.size} selected`;
-  $("copy").disabled = $("download").disabled = !state.selected.size;
 }
 
 function draw() {
@@ -362,42 +347,6 @@ $("list").addEventListener("change", (e) => {
 $("selAll").addEventListener("click", () => { visible().forEach(a => state.selected.add(a.i)); save(); draw(); });
 $("selNone").addEventListener("click", () => { state.selected.clear(); save(); draw(); });
 
-function markdown() {
-  const chosen = arts.filter(a => state.selected.has(a.i));
-  const byTopic = new Map();
-  chosen.forEach(a => {
-    const k = (state.topics.size && a.topics.find(t => state.topics.has(t))) || a.topics[0];
-    if (!byTopic.has(k)) byTopic.set(k, []); byTopic.get(k).push(a);
-  });
-  const order = DATA.topics.map(t => t.id);
-  const lines = [`# Threat Intelligence Bulletin`, ``, `_Period: ${DATA.period}_`, ``];
-  [...byTopic.keys()].sort((x, y) => order.indexOf(x) - order.indexOf(y)).forEach(k => {
-    lines.push(`## ${topicName[k]}`, ``);
-    byTopic.get(k).forEach(a => {
-      lines.push(`### ${a.title}`);
-      const meta = [`Source: [${a.source}](${a.link})`, isoDate(a.date)];
-      if (a.also_reported_by.length) meta.push(`also reported by ${a.also_reported_by.join(", ")}`);
-      lines.push(meta.join(" · ") + "  ");
-      if (a.industries.length) lines.push(`Sectors: ${a.industries.map(i => indName[i]).join(", ")}  `);
-      if (a.locations.length) lines.push(`Locations: ${a.locations.map(l => locName[l]).join(", ")}  `);
-      if (a.cves.length) lines.push(`CVEs: ${a.cves.join(", ")}  `);
-      if (a.summary) lines.push(``, a.summary);
-      lines.push(``);
-    });
-  });
-  return lines.join("\n");
-}
-function toast(msg) { const t = $("toast"); t.textContent = msg; t.classList.add("show"); setTimeout(() => t.classList.remove("show"), 1800); }
-$("copy").addEventListener("click", async () => {
-  const md = markdown();
-  try { await navigator.clipboard.writeText(md); toast("Copied " + state.selected.size + " articles"); }
-  catch (e) { const ta = document.createElement("textarea"); ta.value = md; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); ta.remove(); toast("Copied"); }
-});
-$("download").addEventListener("click", () => {
-  const url = URL.createObjectURL(new Blob([markdown()], { type: "text/markdown" }));
-  const a = Object.assign(document.createElement("a"), { href: url, download: `bulletin-${new Date().toISOString().slice(0, 10)}.md` });
-  a.click(); URL.revokeObjectURL(url);
-});
 draw();
 </script>
 </body>

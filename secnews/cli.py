@@ -11,7 +11,7 @@ from pathlib import Path
 from . import __version__
 from .classify import Classifier, deduplicate, filter_articles, resolve_ids
 from .config import load_sources, load_taxonomy
-from .feeds import fetch_all, fetch_page_images
+from .feeds import enrich_from_pages, fetch_all, needs_page_lookup
 from .models import Article
 from .render import FORMATS, render
 
@@ -61,8 +61,8 @@ def build_parser() -> argparse.ArgumentParser:
     out.add_argument("-f", "--format", choices=FORMATS, help="output format (default: from -o extension, else md)")
     out.add_argument("--input", metavar="JSON", help="re-use articles from a previous --format json run instead of fetching")
     out.add_argument("--no-merge", action="store_true", help="don't merge the same story reported by multiple outlets")
-    out.add_argument("--no-images", action="store_true",
-                     help="don't open article pages to find pictures for articles whose feed has none")
+    out.add_argument("--no-page-lookup", "--no-images", dest="no_page_lookup", action="store_true",
+                     help="don't open article pages to find missing pictures or expand one-line summaries")
     out.add_argument("--workers", type=int, default=10, help="parallel downloads (default: 10)")
     out.add_argument("--timeout", type=float, default=20, help="per-feed timeout in seconds (default: 20)")
     out.add_argument("-q", "--quiet", action="store_true", help="suppress progress output")
@@ -140,11 +140,11 @@ def cmd_fetch(args) -> int:
         include_undated=args.include_undated,
     )
 
-    missing = sum(1 for a in filtered if not a.image)
-    if missing and not args.no_images:
-        _log(args, f"Looking up pictures for {missing} articles without one…")
-        found = fetch_page_images(filtered, workers=args.workers, timeout=min(args.timeout, 10))
-        _log(args, f"  found {found}")
+    pending = sum(1 for a in filtered if needs_page_lookup(a))
+    if pending and not args.no_page_lookup:
+        _log(args, f"Reading {pending} article pages for missing pictures and short summaries…")
+        images, summaries = enrich_from_pages(filtered, workers=args.workers, timeout=min(args.timeout, 10))
+        _log(args, f"  found {images} pictures, expanded {summaries} summaries")
 
     filters = []
     if topics:

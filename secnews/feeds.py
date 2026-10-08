@@ -283,6 +283,46 @@ def page_image(page: str, base: str) -> str:
     return _img_from_html(art.group(0) if art else body, base)
 
 
+SHORT_SUMMARY = 200  # summaries shorter than this get a fuller description from the article page
+_PAGE_DESC_KEYS = ("og:description", "description", "twitter:description")
+_PARA = re.compile(r"<p\b[^>]*>(.*?)</p>", re.IGNORECASE | re.DOTALL)
+_STRIP_BLOCKS = re.compile(r"<(script|style|noscript|nav|header|footer|aside|form|figure)\b.*?</\1>", re.IGNORECASE | re.DOTALL)
+_BOILERPLATE = re.compile(
+    r"cookie|subscribe|sign up|newsletter|advertis|all rights reserved|©|copyright|follow us|"
+    r"share this|related articles?|read more|click here|javascript|log ?in to|you may also like",
+    re.IGNORECASE,
+)
+
+
+def page_description(page: str) -> str:
+    """A fuller article summary: the page's meta description if substantial, else its opening paragraphs."""
+    end = page.lower().find("</head>")
+    head = page[: end if end > 0 else 300_000]
+    meta = ""
+    for tag in _META_TAG.findall(head):
+        a = _attrs(tag)
+        key = (a.get("property") or a.get("name") or "").lower()
+        if key in _PAGE_DESC_KEYS:
+            text = html_to_text(a.get("content", ""))
+            if len(text) > len(meta):
+                meta = text
+    if len(meta) >= SHORT_SUMMARY:
+        return truncate(meta)
+    body = page[end:] if end > 0 else page
+    art = re.search(r"<article\b.*?</article>", body, re.IGNORECASE | re.DOTALL)
+    body = _STRIP_BLOCKS.sub(" ", art.group(0) if art else body)
+    paras: list[str] = []
+    for m in _PARA.finditer(body):
+        text = html_to_text(m.group(1))
+        if len(text) < 60 or _BOILERPLATE.search(text):
+            continue
+        paras.append(text)
+        if sum(len(p) for p in paras) >= SUMMARY_CHARS:
+            break
+    from_paras = " ".join(paras)
+    return truncate(from_paras if len(from_paras) > len(meta) else meta)
+
+
 def parse_feed(data: bytes, source: Source) -> list[Article]:
     root = _parse_xml(data)
     root_name = _local(root.tag)
@@ -400,21 +440,39 @@ def fetch_all(sources: list[Source], workers: int = 10, timeout: float = 20.0) -
         return list(pool.map(lambda s: fetch_source(s, timeout), sources))
 
 
-def _lookup_page_image(article: Article, timeout: float) -> str:
+def needs_page_lookup(article: Article) -> bool:
+    return not article.image or len(article.summary) < SHORT_SUMMARY
+
+
+def _read_page(article: Article, timeout: float) -> tuple[str, str]:
+    """(image, description) from the article's web page; empty strings if it can't be read."""
     try:
         data = _download(article.link, timeout, accept=PAGE_ACCEPT, max_bytes=MAX_PAGE_BYTES, truncate_ok=True)
-        return page_image(data.decode("utf-8", errors="replace"), article.link)
-    except Exception:  # a page we can't read just keeps the placeholder
-        return ""
+        page = data.decode("utf-8", errors="replace")
+    except Exception:  # unreadable pages keep the feed's summary and the placeholder image
+        return "", ""
+    image = "" if article.image else page_image(page, article.link)
+    desc = page_description(page) if len(article.summary) < SHORT_SUMMARY else ""
+    return image, desc
 
 
-def fetch_page_images(articles: list[Article], workers: int = 10, timeout: float = 10.0, limit: int = 500) -> int:
-    """Fill in ``image`` for articles whose feed had none by reading the article page. Returns how many were found."""
-    todo = [a for a in articles if not a.image and a.link.lower().startswith(("https://", "http://", "file://"))][:limit]
+def enrich_from_pages(articles: list[Article], workers: int = 10, timeout: float = 10.0,
+                      limit: int = 500) -> tuple[int, int]:
+    """Read article pages to fill in missing pictures and expand one-line summaries.
+
+    Returns (pictures found, summaries expanded).
+    """
+    todo = [a for a in articles if needs_page_lookup(a)
+            and a.link.lower().startswith(("https://", "http://", "file://"))][:limit]
     if not todo:
-        return 0
+        return 0, 0
     with ThreadPoolExecutor(max_workers=max(1, min(workers, len(todo)))) as pool:
-        images = list(pool.map(lambda a: _lookup_page_image(a, timeout), todo))
-    for art, img in zip(todo, images):
-        art.image = img
-    return sum(1 for img in images if img)
+        results = list(pool.map(lambda a: _read_page(a, timeout), todo))
+    images = summaries = 0
+    for art, (image, desc) in zip(todo, results):
+        if image:
+            art.image, images = image, images + 1
+        # Only replace when the page genuinely says more than the feed did.
+        if desc and len(desc) > len(art.summary) + 40:
+            art.summary, summaries = desc, summaries + 1
+    return images, summaries

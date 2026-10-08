@@ -5,7 +5,7 @@ Pulls the latest cybersecurity news from ~30 sources, tags each article by **top
 - **Pure Python standard library**: Python 3.9+, nothing to install.
 - **Sources:** news outlets (BleepingComputer, The Hacker News, The Record, Krebs, SecurityWeek, Dark Reading…), vendor research (Talos, Unit 42, Microsoft, Google TI, Check Point, Sophos, ESET…), government (CISA, NCSC UK) and blogs (SANS ISC, Schneier).
 - **Filters:** category, industry, location, source, source type, date range, free text, CVE-only.
-- **Extras:** shows each article's picture (taken from the feed, or from the article page's share image when the feed has none), extracts CVE IDs, merges the same story when several outlets cover it ("3 outlets"), and reports feeds that fail without stopping the run.
+- **Extras:** shows each article's picture and a proper summary (taken from the feed, or from the article page when the feed has no picture or only a one-liner), extracts CVE IDs, merges the same story when several outlets cover it ("3 outlets"), and reports feeds that fail without stopping the run.
 - **Outputs:** interactive HTML, Markdown, JSON, CSV.
 
 ## Quick start
@@ -29,7 +29,7 @@ Optionally install it as a `secnews` command: `pip install .` (or `pipx install 
    ```bash
    python3 -m secnews fetch --input reports/2026-W41.json -o reports/2026-W41.html
    ```
-   Click category, industry and location filters, search for actors or products, and tick the articles you want. **Copy selected as Markdown** gives you a bulletin draft grouped by category, with sources, sectors and CVEs. Your selections are kept if you reload the page.
+   Click category, industry, location, source and time period filters, or search for actors or products. You can tick articles to shortlist them; **Only selected articles** then shows just your shortlist, and it's kept if you reload the page.
 3. **Or slice it from the command line:**
    ```bash
    # Vulnerabilities + ransomware only, as Markdown
@@ -70,7 +70,7 @@ Key `fetch` options:
 | `-o FILE` / `-f FORMAT` | Output file; the format comes from the extension (`.html .md .json .csv`). Without `-o`, Markdown goes to stdout |
 | `--input FILE.json` | Re-use a previous JSON snapshot instead of fetching |
 | `--no-merge` | Keep duplicate coverage of the same story as separate entries |
-| `--no-images` | Skip opening article pages to find pictures for articles whose feed has none. Faster; those articles show a source-name block instead |
+| `--no-page-lookup` | Skip opening article pages. By default the tool reads the page of any article whose feed gave no picture or only a one-line summary, and fills them in. This option is faster, but those articles keep the feed's short text and show a source-name block instead of a picture |
 
 Filters are combined with AND across types (category **and** industry **and** location) and with OR within one type (`-c fraud -c phishing` means either).
 

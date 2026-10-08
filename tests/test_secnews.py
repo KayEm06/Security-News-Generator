@@ -9,7 +9,7 @@ from pathlib import Path
 from secnews.classify import Classifier, deduplicate, filter_articles, normalize_url, resolve_ids
 from secnews.cli import main
 from secnews.config import Source, load_sources, load_taxonomy
-from secnews.feeds import fetch_source, page_image, parse_date, parse_feed
+from secnews.feeds import fetch_source, page_description, page_image, parse_date, parse_feed
 from secnews.models import Article
 
 FIX = Path(__file__).parent / "fixtures"
@@ -99,6 +99,22 @@ class ParsingTests(unittest.TestCase):
         body = '<head></head><body><img src="/logo.png"><article><img src="/a/1x1.gif" width="1"><img src="/a/main.jpg"></article></body>'
         self.assertEqual(page_image(body, base), "https://site.example/a/main.jpg")
         self.assertEqual(page_image("<head><title>none</title></head><body><p>x</p></body>", base), "")
+
+    def test_page_description(self):
+        long_meta = "x " * 120
+        self.assertEqual(page_description(f'<head><meta property="og:description" content="{long_meta}"></head>'),
+                         long_meta.strip())
+        page = """<head><meta name="description" content="Short teaser."></head><body>
+            <nav><p>Home | News | Subscribe to our newsletter for daily updates on security</p></nav>
+            <article><p>By Staff</p>
+            <p>Threat actors are exploiting a critical flaw in Atlassian Data Center products to read sensitive files.</p>
+            <p>Sign up for our newsletter to get stories like this one in your inbox every morning, free.</p>
+            <p>The vendor has released fixes and urges customers to upgrade immediately, according to the advisory.</p>
+            </article></body>"""
+        self.assertEqual(page_description(page),
+                         "Threat actors are exploiting a critical flaw in Atlassian Data Center products to read sensitive "
+                         "files. The vendor has released fixes and urges customers to upgrade immediately, according to the advisory.")
+        self.assertEqual(page_description('<head><meta name="description" content="Only this."></head><body></body>'), "Only this.")
 
     def test_html_page_reports_error(self):
         r = fetch_source(Source("Blocked", (FIX / "blocked.html").as_uri()))
@@ -224,27 +240,32 @@ class CliTests(unittest.TestCase):
         self.sources = self.tmp / "sources.json"
         self.sources.write_text(json.dumps({"sources": feeds}))
 
-    def run_cli(self, *args, images=False):
+    def run_cli(self, *args, pages=False):
         out, err = io.StringIO(), io.StringIO()
-        if args and args[0] == "fetch" and not images:
-            args = (*args, "--no-images")  # fixture links point at example.com; keep tests offline
+        if args and args[0] == "fetch" and not pages:
+            args = (*args, "--no-page-lookup")  # fixture links point at example.com; keep tests offline
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
             code = main(["--sources-file", str(self.sources), *args])
         return code, out.getvalue(), err.getvalue()
 
-    def test_page_image_lookup(self):
+    def test_page_lookup(self):
+        desc = ("Attackers breached the council's network and encrypted file servers, forcing staff back to pen "
+                "and paper while services for residents were disrupted across the borough for most of the week.")
         page = self.tmp / "article.html"
-        page.write_text('<html><head><meta property="og:image" content="https://cdn.example/hero.jpg"></head><body></body></html>')
+        page.write_text(f'<html><head><meta property="og:image" content="https://cdn.example/hero.jpg">'
+                        f'<meta name="description" content="{desc}"></head><body></body></html>')
         feed = self.tmp / "feed.xml"
         feed.write_text(f"""<rss version="2.0"><channel><item><title>Ransomware hits council</title>
             <link>{page.as_uri()}</link><pubDate>Mon, 05 Oct 2026 09:00:00 +0000</pubDate>
             <description>No picture in the feed.</description></item></channel></rss>""")
         self.sources.write_text(json.dumps({"sources": [{"name": "Local", "url": feed.as_uri()}]}))
         out = self.tmp / "r.json"
-        code, _, err = self.run_cli("fetch", "--since", "2026-09-30", "-o", str(out), images=True)
+        code, _, err = self.run_cli("fetch", "--since", "2026-09-30", "-o", str(out), pages=True)
         self.assertEqual(code, 0, err)
-        self.assertIn("found 1", err)
-        self.assertEqual(json.loads(out.read_text())["articles"][0]["image"], "https://cdn.example/hero.jpg")
+        self.assertIn("found 1 pictures, expanded 1 summaries", err)
+        art = json.loads(out.read_text())["articles"][0]
+        self.assertEqual(art["image"], "https://cdn.example/hero.jpg")
+        self.assertEqual(art["summary"], desc)
 
     def test_all_formats(self):
         common = ["fetch", "--since", "2026-09-30", "--until", "2026-10-07"]
