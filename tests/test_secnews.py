@@ -54,6 +54,12 @@ class ParsingTests(unittest.TestCase):
         self.assertEqual(arts[0].title, "AT&T and R&D data leaked")
         self.assertEqual(arts[0].link, "https://broken.example.com/a?x=1&y=2")
 
+    def test_images(self):
+        arts = parse("charity.xml")
+        self.assertEqual(arts[0].image, "https://img.example.com/charity.jpg?w=320&h=180")  # media:thumbnail
+        self.assertEqual(arts[1].image, "https://img.example.com/factory.png")  # skips 1x1 tracking pixel
+        self.assertEqual(parse("rdf.xml")[0].image, "")
+
     def test_html_page_reports_error(self):
         r = fetch_source(Source("Blocked", (FIX / "blocked.html").as_uri()))
         self.assertEqual(r.articles, [])

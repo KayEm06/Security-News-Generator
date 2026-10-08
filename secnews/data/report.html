@@ -3,144 +3,158 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Secpurity Digest</title>
+<title>sanitised. Security News</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,500;0,600;0,700;1,700&display=swap" rel="stylesheet">
 <style>
 :root {
-  --bg: #ffffff; --surface: #f8fafc; --ink: #0f172a; --text: #334155; --muted: #64748b; --faint: #94a3b8;
-  --line: #e2e8f0; --line-soft: #f1f5f9;
-  --accent: #4f46e5; --accent-hover: #4338ca; --accent-soft: #eef2ff; --accent-ink: #ffffff;
-  --cve: #b91c1c; --cve-soft: #fef2f2; --hot: #b45309; --hot-soft: #fffbeb;
-  --radius: 14px; --pill: 999px;
-  --shadow: 0 1px 2px rgba(15, 23, 42, .04), 0 4px 16px rgba(15, 23, 42, .04);
+  --maroon: #5a0000; --maroon-text: #6b0000; --navy: #000d4c; --red: #cc0000; --rule: #8b1a1a;
+  --ink: #000000; --text: #1a1a1a; --muted: #6b6b6b; --faint: #b5b5b5; --bg: #ffffff; --hover: #f3f4f8;
   --font: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 * { box-sizing: border-box; }
-body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.55 var(--font); -webkit-font-smoothing: antialiased; font-feature-settings: "cv11", "ss01"; }
+html { scroll-behavior: smooth; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 13px/1.25 var(--font); }
 button, input, select { font-family: var(--font); }
+a { color: inherit; }
+.wrap { max-width: 1272px; margin: 0 auto; padding: 0 16px; }
 
-/* Top bar */
-.topbar { border-bottom: 1px solid var(--line); background: rgba(255,255,255,.9); backdrop-filter: blur(8px); }
-.topbar-inner { max-width: 1240px; margin: 0 auto; padding: 14px 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-.logo { display: flex; align-items: center; gap: 10px; color: var(--ink); text-decoration: none; }
-.logo svg { width: 34px; height: 34px; flex: none; }
-.logo-word { font-weight: 700; font-size: 20px; letter-spacing: -.02em; }
-.logo-word span { color: var(--accent); }
-.period { font-size: 13px; font-weight: 500; color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: var(--pill); padding: 6px 12px; }
-
-/* Hero */
-.hero { max-width: 1240px; margin: 0 auto; padding: 32px 16px 8px; }
-h1 { margin: 0; color: var(--ink); font-weight: 700; font-size: clamp(24px, 4vw, 32px); letter-spacing: -.025em; line-height: 1.15; }
-.sub { color: var(--muted); font-size: 15px; margin-top: 6px; }
-.stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 22px; }
-.stat { border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; background: var(--bg); }
-.stat b { display: block; color: var(--ink); font-size: 26px; font-weight: 700; letter-spacing: -.02em; font-variant-numeric: tabular-nums; line-height: 1.1; }
-.stat span { font-size: 13px; color: var(--muted); }
-@media (max-width: 640px) { .stats { grid-template-columns: repeat(2, 1fr); } }
+/* Brand bar + navigation */
+.brand { background: var(--maroon); color: #fff; }
+.brand .wrap { display: flex; align-items: flex-end; gap: 20px; min-height: 51px; padding-top: 10px; padding-bottom: 10px; flex-wrap: wrap; }
+.brand svg { width: 127px; height: 27px; flex: none; display: block; }
+.tagline { font-size: 14px; line-height: 1; padding-bottom: 2px; }
+.nav { background: var(--navy); }
+.nav .wrap { display: flex; gap: 0; overflow-x: auto; }
+.nav a { color: #fff; text-decoration: none; font-size: 14px; line-height: 26px; padding: 0 71px 0 0; white-space: nowrap; }
+.nav a:hover, .nav a:focus-visible { text-decoration: underline; outline: none; }
 
 /* Layout */
-.layout { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 24px; max-width: 1240px; margin: 0 auto; padding: 20px 16px 64px; }
-@media (max-width: 860px) { .layout { grid-template-columns: 1fr; gap: 16px; } aside { position: static !important; max-height: none !important; } .toolbar { position: static; } }
-aside { position: sticky; top: 16px; align-self: start; max-height: calc(100vh - 32px); overflow: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 16px; }
-aside h3 { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin: 20px 0 10px; display: flex; justify-content: space-between; align-items: center; }
-aside h3 button { font-size: 12px; font-weight: 500; text-transform: none; letter-spacing: 0; }
-input[type=search], input[type=date], select { width: 100%; padding: 9px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--ink); font-size: 14px; transition: border-color .15s, box-shadow .15s; }
-input[type=search]:focus, input[type=date]:focus, select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
-.chip:focus-visible, .btn:focus-visible, button.link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.chip { display: inline-flex; align-items: center; gap: 6px; text-align: left; border: 1px solid var(--line); background: var(--bg); color: var(--text); border-radius: var(--pill); padding: 5px 10px; font-size: 13px; font-weight: 500; cursor: pointer; transition: background .15s, border-color .15s, color .15s; }
-.chip::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--c, var(--faint)); flex: none; }
-.chip:hover { border-color: var(--faint); }
-.chip[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
-.chip .n { color: var(--faint); font-weight: 500; font-variant-numeric: tabular-nums; }
-.chip[aria-pressed="true"] .n { color: var(--accent); opacity: .7; }
-button.link { background: none; border: 0; color: var(--accent); cursor: pointer; padding: 0; border-radius: 4px; }
-label.toggle { display: flex; gap: 8px; align-items: center; font-size: 14px; margin-top: 12px; cursor: pointer; color: var(--text); }
-label.toggle input { accent-color: var(--accent); width: 16px; height: 16px; }
+.layout { display: grid; grid-template-columns: 181px minmax(0, 1fr); gap: 39px; padding-top: 10px; padding-bottom: 48px; }
+@media (max-width: 760px) {
+  .layout { grid-template-columns: 1fr; gap: 28px; }
+  main { order: -1; }
+  aside { border-top: 2px solid var(--navy); padding-top: 12px; }
+  .opt { white-space: normal; }
+  .nav a { padding-right: 28px; }
+}
 
-/* Toolbar */
-.toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; background: rgba(255,255,255,.92); backdrop-filter: blur(8px); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; margin-bottom: 8px; position: sticky; top: 8px; z-index: 2; box-shadow: var(--shadow); }
-.toolbar .count { font-size: 14px; font-weight: 500; color: var(--muted); margin-right: auto; font-variant-numeric: tabular-nums; }
-.btn { border: 1px solid var(--line); background: var(--bg); color: var(--ink); border-radius: var(--pill); padding: 7px 14px; cursor: pointer; font-size: 13.5px; font-weight: 500; transition: background .15s, border-color .15s; }
-.btn:hover:not(:disabled) { background: var(--surface); border-color: var(--faint); }
-.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
-.btn.primary:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); }
-.btn:disabled { opacity: .45; cursor: default; }
-.toolbar select { width: auto; border-radius: var(--pill); padding: 7px 12px; font-size: 13.5px; font-weight: 500; }
+/* Sidebar */
+aside section { padding-bottom: 12px; margin-bottom: 10px; border-bottom: 1px solid var(--rule); scroll-margin-top: 12px; }
+aside section:last-child { border-bottom: 0; }
+aside section.flash { animation: flash 1s ease-out; }
+@keyframes flash { from { background: #fff3f3; } to { background: transparent; } }
+.sec-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+aside h3 { margin: 0; font-size: 14px; font-weight: 700; color: var(--ink); }
+.clear { background: none; border: 0; padding: 0; color: var(--red); font-size: 12px; cursor: pointer; }
+.clear:hover { text-decoration: underline; }
+.clear[hidden] { display: none; }
+.search, .datein { width: 100%; height: 25px; border: 0; border-radius: 0; background: var(--navy); color: #fff; font-size: 12px; font-weight: 700; padding: 0 4px; margin-bottom: 12px; }
+.search::placeholder { color: #fff; opacity: 1; }
+.search:focus, .datein:focus { outline: 2px solid var(--red); outline-offset: 0; }
+.datein { color-scheme: dark; font-weight: 500; margin: 6px 0 0; }
+.opts { list-style: none; margin: 0; padding: 0; }
+.opt { display: block; width: 100%; white-space: nowrap; text-align: left; background: none; border: 0; padding: 0; margin: 0; font-size: 12px; line-height: 15px; color: var(--text); cursor: pointer; }
+.opt:hover { color: var(--navy); text-decoration: underline; }
+.opt:focus-visible { outline: 1px solid var(--navy); }
+.opt[aria-pressed="true"] { font-weight: 700; color: var(--maroon-text); }
+.opt[aria-pressed="true"]::before { content: "■ "; font-size: 9px; vertical-align: 1px; }
+.opt:disabled { color: var(--faint); cursor: default; text-decoration: none; }
+.opt[hidden] { display: none; }
+.label { display: block; font-size: 12px; color: var(--muted); margin-top: 8px; }
+label.check { display: flex; gap: 6px; align-items: center; font-size: 12px; margin-top: 4px; cursor: pointer; }
+label.check input { accent-color: var(--navy); margin: 0; }
 
-/* Groups and cards */
-h2.group { color: var(--ink); font-size: 18px; font-weight: 600; letter-spacing: -.01em; margin: 28px 0 12px; display: flex; gap: 10px; align-items: center; }
-h2.group::before { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--c, var(--accent)); flex: none; }
-h2.group span { font-size: 12px; font-weight: 600; color: var(--muted); background: var(--line-soft); border-radius: var(--pill); padding: 2px 9px; }
-article { background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; margin-bottom: 10px; display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 4px 12px; transition: border-color .15s, box-shadow .15s; }
-article:hover { box-shadow: var(--shadow); border-color: #cbd5e1; }
-article.sel { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
-article input { margin-top: 4px; width: 16px; height: 16px; accent-color: var(--accent); }
-article h4 { margin: 0; font-size: 16.5px; font-weight: 600; line-height: 1.4; letter-spacing: -.01em; }
-article h4 a { color: var(--ink); text-decoration: none; }
-article h4 a:hover { color: var(--accent); }
-.meta { font-size: 13px; color: var(--muted); margin: 3px 0 8px; }
-.meta .src { color: var(--text); font-weight: 600; }
-.summary { font-size: 14.5px; margin: 0; color: var(--text); overflow-wrap: anywhere; max-width: 80ch; }
-.tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
-.tag { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 500; line-height: 1; padding: 5px 10px; border-radius: var(--pill); background: color-mix(in srgb, var(--c, var(--accent)) 14%, white); color: color-mix(in srgb, var(--c, var(--accent)) 70%, black); }
-.tag.solid { background: var(--c); color: #fff; }
-.tag.ind { background: var(--line-soft); color: var(--text); }
-.tag.loc { background: var(--bg); border: 1px solid var(--line); color: var(--muted); padding: 4px 9px; }
-.tag.loc::before { content: ""; width: 6px; height: 6px; border-radius: 50%; border: 1.5px solid currentColor; }
-.tag.cve { background: var(--cve-soft); color: var(--cve); font-variant-numeric: tabular-nums; }
-.tag.hot { background: var(--hot-soft); color: var(--hot); font-weight: 600; }
-.errors { border: 1px solid #fde68a; background: var(--hot-soft); color: var(--hot); border-radius: 12px; padding: 10px 14px; font-size: 13.5px; margin-bottom: 12px; }
+/* Main column */
+.displaying { margin: 0; color: var(--maroon-text); font-size: 14.5px; font-weight: 700; font-style: italic; }
+.actions { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; margin-top: 6px; font-size: 12px; color: var(--muted); }
+.actions button { background: none; border: 0; padding: 0; color: var(--navy); font-size: 12px; cursor: pointer; }
+.actions button:hover:not(:disabled) { text-decoration: underline; }
+.actions button:disabled { color: var(--faint); cursor: default; }
+.actions .primary { font-weight: 700; color: var(--maroon-text); }
+.actions select { border: 1px solid #d0d0d0; border-radius: 0; background: #fff; font-size: 12px; padding: 1px 2px; color: var(--text); }
+h2.group { margin: 6px 0 12px; font-size: 36px; line-height: 1.15; font-weight: 700; color: var(--ink); letter-spacing: -.01em; }
+.item { margin-bottom: 26px; }
+.item h4 { margin: 0; font-size: 14.5px; line-height: 1.3; font-weight: 700; color: var(--ink); display: flex; gap: 7px; align-items: baseline; }
+.item h4 a { text-decoration: none; }
+.item h4 a:hover { text-decoration: underline; }
+.item h4 input { accent-color: var(--navy); margin: 0; position: relative; top: 1px; flex: none; }
+.item.sel h4 a { color: var(--navy); }
+.byline { font-size: 12.5px; margin: 4px 0 6px; line-height: 1.4; }
+.byline .src { color: var(--navy); }
+.byline .date { color: var(--maroon-text); }
+.byline .t { color: var(--muted); }
+.byline .t::before { content: " · "; color: var(--faint); }
+.byline .t.topic { color: var(--c); font-weight: 600; }
+.byline .t.cve { color: var(--red); }
+.byline .t.hot { color: var(--maroon-text); font-weight: 600; }
+.body { display: grid; grid-template-columns: 161px minmax(0, 1fr); gap: 12px; align-items: start; }
+@media (max-width: 560px) { .body { grid-template-columns: 110px minmax(0, 1fr); } h2.group { font-size: 28px; } }
+.thumb { display: block; width: 100%; aspect-ratio: 161 / 91; overflow: hidden; background: var(--navy); }
+.thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.thumb .ph { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; padding: 8px; text-align: center; color: #fff; font-weight: 700; font-size: 13px; letter-spacing: .06em; text-transform: uppercase; line-height: 1.2; }
+.summary { margin: 0; font-size: 12.5px; line-height: 15px; color: var(--text); overflow-wrap: anywhere; }
+.errors { font-size: 12px; color: var(--maroon-text); margin: 8px 0 4px; }
 .errors summary { cursor: pointer; font-weight: 600; }
-.empty { color: var(--muted); text-align: center; padding: 56px 0; font-size: 15px; }
-.toast { position: fixed; bottom: 24px; left: 50%; transform: translate(-50%, 8px); background: var(--ink); color: #fff; padding: 10px 18px; border-radius: var(--pill); font-size: 14px; font-weight: 500; opacity: 0; transition: opacity .2s, transform .2s; pointer-events: none; box-shadow: 0 8px 24px rgba(15,23,42,.18); }
-.toast.show { opacity: 1; transform: translate(-50%, 0); }
+.empty { font-size: 14px; color: var(--muted); padding: 24px 0; }
+.toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--navy); color: #fff; padding: 8px 14px; font-size: 13px; font-weight: 600; opacity: 0; transition: opacity .2s; pointer-events: none; }
+.toast.show { opacity: 1; }
 </style>
 </head>
 <body>
 <header>
-  <div class="topbar">
-    <div class="topbar-inner">
-      <div class="logo" aria-label="Secpurity">
-        <svg viewBox="0 0 34 34" aria-hidden="true">
-          <defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#6366f1"/><stop offset="1" stop-color="#06b6d4"/></linearGradient></defs>
-          <rect width="34" height="34" rx="10" fill="url(#lg)"/>
-          <path d="M17 7.5 10 10.2v5.3c0 4.6 3 8.6 7 10 4-1.4 7-5.4 7-10v-5.3L17 7.5Z" fill="#fff" fill-opacity=".22" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/>
-          <path d="m13.8 16.6 2.3 2.3 4.4-4.6" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-        <span class="logo-word">Sec<span>purity</span></span>
-      </div>
-      <span class="period" id="period"></span>
-    </div>
-  </div>
-  <div class="hero">
-    <h1>Security news digest</h1>
-    <div class="sub" id="sub"></div>
-    <div class="stats" id="stats"></div>
-  </div>
+  <div class="brand"><div class="wrap">
+    <span role="img" aria-label="sanitised."><!--__LOGO__--></span>
+    <span class="tagline">The all-in-one tool for all of your security related news</span>
+  </div></div>
+  <nav class="nav" aria-label="Filters"><div class="wrap">
+    <a href="#f-topics">Categories</a>
+    <a href="#f-industries">Industries</a>
+    <a href="#f-locations">Locations</a>
+    <a href="#f-time">Time period</a>
+  </div></nav>
 </header>
-<div class="layout">
+
+<div class="wrap layout">
   <aside>
-    <input type="search" id="q" placeholder="Search titles, summaries, CVEs…" aria-label="Search">
-    <h3>Category <button class="link" data-clear="topics">clear</button></h3>
-    <div class="chips" id="topics"></div>
-    <h3>Industry <button class="link" data-clear="industries">clear</button></h3>
-    <div class="chips" id="industries"></div>
-    <h3>Location <button class="link" data-clear="locations">clear</button></h3>
-    <div class="chips" id="locations"></div>
-    <h3>Source</h3>
-    <select id="source"><option value="">All sources</option></select>
-    <h3>Published on or after</h3>
-    <input type="date" id="from">
-    <label class="toggle"><input type="checkbox" id="cveOnly"> Only articles mentioning CVEs</label>
-    <label class="toggle"><input type="checkbox" id="selOnly"> Only selected articles</label>
+    <section id="f-topics">
+      <div class="sec-head"><h3>Category</h3><button class="clear" data-clear="topics">Clear</button></div>
+      <input class="search" type="search" placeholder="Search" aria-label="Search categories" data-for="topics">
+      <div class="opts" id="topics"></div>
+    </section>
+    <section id="f-industries">
+      <div class="sec-head"><h3>Industry</h3><button class="clear" data-clear="industries">Clear</button></div>
+      <input class="search" type="search" placeholder="Search" aria-label="Search industries" data-for="industries">
+      <div class="opts" id="industries"></div>
+    </section>
+    <section id="f-locations">
+      <div class="sec-head"><h3>Location</h3><button class="clear" data-clear="locations">Clear</button></div>
+      <input class="search" type="search" placeholder="Search" aria-label="Search locations" data-for="locations">
+      <div class="opts" id="locations"></div>
+    </section>
+    <section id="f-sources">
+      <div class="sec-head"><h3>Source</h3><button class="clear" data-clear="sources">Clear</button></div>
+      <input class="search" type="search" placeholder="Search" aria-label="Search sources" data-for="sources">
+      <div class="opts" id="sources"></div>
+    </section>
+    <section id="f-time">
+      <div class="sec-head"><h3>Time period</h3><button class="clear" id="timeClear">Clear</button></div>
+      <div class="opts" id="time"></div>
+      <span class="label">Or published on or after</span>
+      <input class="datein" type="date" id="from" aria-label="Published on or after">
+    </section>
+    <section id="f-more">
+      <div class="sec-head"><h3>More</h3></div>
+      <input class="search" type="search" id="q" placeholder="Search articles" aria-label="Search titles, summaries and CVEs">
+      <label class="check"><input type="checkbox" id="cveOnly"> Only articles mentioning CVEs</label>
+      <label class="check"><input type="checkbox" id="selOnly"> Only selected articles</label>
+    </section>
   </aside>
+
   <main>
-    <div id="errors"></div>
-    <div class="toolbar">
-      <span class="count" id="count"></span>
+    <p class="displaying" id="displaying"></p>
+    <div class="actions">
       <select id="group" aria-label="Group by">
         <option value="topic">Group by category</option>
         <option value="industry">Group by industry</option>
@@ -149,15 +163,18 @@ article h4 a:hover { color: var(--accent); }
         <option value="source">Group by source</option>
         <option value="none">No grouping</option>
       </select>
-      <button class="btn" id="selAll">Select visible</button>
-      <button class="btn" id="selNone">Clear selection</button>
-      <button class="btn primary" id="copy">Copy as Markdown</button>
-      <button class="btn" id="download">Download .md</button>
+      <span id="selCount"></span>
+      <button id="selAll">Select visible</button>
+      <button id="selNone">Clear selection</button>
+      <button class="primary" id="copy">Copy as Markdown</button>
+      <button id="download">Download .md</button>
     </div>
+    <div id="errors"></div>
     <div id="list"></div>
   </main>
 </div>
-<div class="toast" id="toast"></div>
+<div class="toast" id="toast" role="status"></div>
+
 <script>
 const DATA = /*__DATA__*/null;
 const $ = (id) => document.getElementById(id);
@@ -165,95 +182,112 @@ const topicName = Object.fromEntries(DATA.topics.map(t => [t.id, t.name]));
 const indName = Object.fromEntries(DATA.industries.map(t => [t.id, t.name]));
 const locName = Object.fromEntries(DATA.locations.map(t => [t.id, t.name]));
 const arts = DATA.articles.map((a, i) => ({ ...a, i, date: a.published ? new Date(a.published) : null }));
-const state = { topics: new Set(), industries: new Set(), locations: new Set(), selected: new Set() };
+const state = { topics: new Set(), industries: new Set(), locations: new Set(), sources: new Set(), days: 0, selected: new Set() };
 const store = (() => { try { return window.localStorage; } catch (e) { return null; } })();
 const KEY = "secnews-selected:" + DATA.generated;
 try { JSON.parse(store?.getItem(KEY) || "[]").forEach(l => { const a = arts.find(x => x.link === l); if (a) state.selected.add(a.i); }); } catch (e) {}
 const save = () => { try { store?.setItem(KEY, JSON.stringify([...state.selected].map(i => arts[i].link))); } catch (e) {} };
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const safeUrl = (u) => /^https?:\/\//i.test(u) ? u : "#";
-const fmtDate = (d) => d ? d.toISOString().slice(0, 10) : "undated";
+const safeUrl = (u) => /^https?:\/\//i.test(u || "") ? u : "";
+const isoDate = (d) => d ? d.toISOString().slice(0, 10) : "undated";
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const niceDate = (d) => d ? `${String(d.getUTCDate()).padStart(2, "0")} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}` : "Undated";
 
-const nSources = new Set(arts.map(a => a.source)).size;
-$("period").textContent = DATA.period;
-$("sub").textContent = `Articles from ${nSources} sources, tagged by category, industry and location.`;
-$("stats").innerHTML = [
-  [arts.length, "Articles"], [nSources, "Sources"],
-  [new Set(arts.flatMap(a => a.cves)).size, "CVEs cited"],
-  [arts.filter(a => a.also_reported_by.length).length, "Multi-outlet stories"],
-].map(([n, l]) => `<div class="stat"><b>${n}</b><span>${l}</span></div>`).join("");
-// One colour per topic, used for chip/card/group strips.
-// Colours come from categories.json; the palette only covers topics without one.
+// Category colours come from categories.json; the palette only covers topics without one.
 const PALETTE = ["#4f46e5", "#e11d48", "#7c3aed", "#0d9488", "#2563eb", "#db2777", "#d97706", "#0891b2", "#65a30d", "#9333ea", "#475569", "#059669", "#64748b"];
 const topicColor = Object.fromEntries(DATA.topics.map((t, i) => [t.id, t.color || PALETTE[i % PALETTE.length]]));
-// Very dark colours wash out as pale tints, so their tags are drawn solid with white text.
-const isDark = (hex) => {
-  const m = /^#?([0-9a-f]{6})$/i.exec(hex || ""); if (!m) return false;
-  const [r, g, b] = [0, 2, 4].map(i => parseInt(m[1].slice(i, i + 2), 16) / 255);
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b < 0.32;
-};
 
 const errs = Object.entries(DATA.errors || {});
 if (errs.length) {
   $("errors").innerHTML = `<details class="errors"><summary>${errs.length} source(s) could not be fetched</summary><ul>${errs.map(([s, e]) => `<li><b>${esc(s)}</b>: ${esc(e)}</li>`).join("")}</ul></details>`;
 }
 
-function buildChips(el, items, key, field) {
+// ---- Sidebar option lists ------------------------------------------------
+const sourceItems = [...new Set(arts.map(a => a.source))].sort().map(s => ({ id: s, name: s }));
+const LISTS = {
+  topics: { items: DATA.topics, field: a => a.topics },
+  industries: { items: DATA.industries, field: a => a.industries },
+  locations: { items: DATA.locations, field: a => a.locations },
+  sources: { items: sourceItems, field: a => [a.source] },
+};
+for (const [key, { items, field }] of Object.entries(LISTS)) {
   const counts = {};
-  arts.forEach(a => a[field].forEach(id => counts[id] = (counts[id] || 0) + 1));
-  el.innerHTML = items.filter(t => counts[t.id]).map(t =>
-    `<button class="chip" aria-pressed="false" data-id="${t.id}"${field === "topics" ? ` style="--c:${topicColor[t.id]}"` : ""}>${esc(t.name)}<span class="n">${counts[t.id]}</span></button>`).join("") || '<span class="sub">none</span>';
-  el.addEventListener("click", (e) => {
-    const b = e.target.closest(".chip"); if (!b) return;
+  arts.forEach(a => field(a).forEach(id => counts[id] = (counts[id] || 0) + 1));
+  $(key).innerHTML = items.map(t => {
+    const n = counts[t.id] || 0;
+    return `<button class="opt" aria-pressed="false" data-id="${esc(t.id)}" data-name="${esc(t.name.toLowerCase())}" title="${n} article${n === 1 ? "" : "s"}"${n ? "" : " disabled"}>${esc(t.name)}</button>`;
+  }).join("");
+  $(key).addEventListener("click", (e) => {
+    const b = e.target.closest(".opt"); if (!b) return;
     const s = state[key], id = b.dataset.id;
     s.has(id) ? s.delete(id) : s.add(id);
     b.setAttribute("aria-pressed", s.has(id));
     draw();
   });
 }
-buildChips($("topics"), DATA.topics, "topics", "topics");
-buildChips($("industries"), DATA.industries, "industries", "industries");
-buildChips($("locations"), DATA.locations, "locations", "locations");
+document.querySelectorAll(".search[data-for]").forEach(inp => inp.addEventListener("input", () => {
+  const q = inp.value.trim().toLowerCase();
+  $(inp.dataset.for).querySelectorAll(".opt").forEach(o => o.hidden = q && !o.dataset.name.includes(q));
+}));
 document.querySelectorAll("[data-clear]").forEach(b => b.addEventListener("click", () => {
-  state[b.dataset.clear].clear();
-  $(b.dataset.clear).querySelectorAll(".chip").forEach(c => c.setAttribute("aria-pressed", "false"));
+  const key = b.dataset.clear;
+  state[key].clear();
+  $(key).querySelectorAll(".opt").forEach(o => o.setAttribute("aria-pressed", "false"));
   draw();
 }));
-[...new Set(arts.map(a => a.source))].sort().forEach(s => $("source").insertAdjacentHTML("beforeend", `<option>${esc(s)}</option>`));
-["q", "source", "from", "cveOnly", "selOnly", "group"].forEach(id => $(id).addEventListener("input", draw));
 
+// ---- Time period ---------------------------------------------------------
+const PERIODS = [[0, "Any time"], [1, "Last 24 hours"], [3, "Last 3 days"], [7, "Last 7 days"], [14, "Last 14 days"]];
+$("time").innerHTML = PERIODS.map(([d, l]) => `<button class="opt" data-days="${d}" aria-pressed="${d === 0}">${l}</button>`).join("");
+const setDays = (d) => {
+  state.days = d;
+  $("time").querySelectorAll(".opt").forEach(o => o.setAttribute("aria-pressed", String(+o.dataset.days === d && !$("from").value)));
+};
+$("time").addEventListener("click", (e) => {
+  const b = e.target.closest(".opt"); if (!b) return;
+  $("from").value = ""; setDays(+b.dataset.days); draw();
+});
+$("from").addEventListener("input", () => { setDays(0); draw(); });
+$("timeClear").addEventListener("click", () => { $("from").value = ""; setDays(0); draw(); });
+
+// Top navigation jumps to the matching filter and puts the cursor in its search box.
+document.querySelectorAll(".nav a").forEach(a => a.addEventListener("click", () => {
+  const sec = document.querySelector(a.getAttribute("href"));
+  sec.classList.remove("flash"); void sec.offsetWidth; sec.classList.add("flash");
+  setTimeout(() => (sec.querySelector(".search, .datein") || sec).focus({ preventScroll: true }), 350);
+}));
+["q", "cveOnly", "selOnly", "group"].forEach(id => $(id).addEventListener("input", draw));
+
+// ---- Filtering, grouping, rendering --------------------------------------
 function visible() {
-  const q = $("q").value.trim().toLowerCase(), src = $("source").value, from = $("from").value;
+  const q = $("q").value.trim().toLowerCase(), from = $("from").value;
+  const cutoff = state.days ? Date.now() - state.days * 864e5 : 0;
   return arts.filter(a =>
     (!state.topics.size || a.topics.some(t => state.topics.has(t))) &&
     (!state.industries.size || a.industries.some(t => state.industries.has(t))) &&
     (!state.locations.size || a.locations.some(t => state.locations.has(t))) &&
-    (!src || a.source === src) &&
-    (!from || (a.date && fmtDate(a.date) >= from)) &&
+    (!state.sources.size || state.sources.has(a.source)) &&
+    (!from || (a.date && isoDate(a.date) >= from)) &&
+    (!cutoff || (a.date && a.date.getTime() >= cutoff)) &&
     (!$("cveOnly").checked || a.cves.length) &&
     (!$("selOnly").checked || state.selected.has(a.i)) &&
     (!q || (a.title + " " + a.summary + " " + a.cves.join(" ") + " " + a.source).toLowerCase().includes(q)));
 }
 
 function groupKey(a, mode) {
-  if (mode === "topic") {
-    const active = state.topics.size ? a.topics.find(t => state.topics.has(t)) : null;
-    return [active || a.topics[0]];
-  }
-  if (mode === "industry") return a.industries.length ? [a.industries[0]] : ["_none"];
-  if (mode === "location") {
-    const active = state.locations.size ? a.locations.find(t => state.locations.has(t)) : null;
-    return [active || a.locations[0] || "_none"];
-  }
-  if (mode === "date") return [fmtDate(a.date)];
-  if (mode === "source") return [a.source];
-  return [""];
+  if (mode === "topic") return (state.topics.size && a.topics.find(t => state.topics.has(t))) || a.topics[0];
+  if (mode === "industry") return (state.industries.size && a.industries.find(t => state.industries.has(t))) || a.industries[0] || "_none";
+  if (mode === "location") return (state.locations.size && a.locations.find(t => state.locations.has(t))) || a.locations[0] || "_none";
+  if (mode === "date") return isoDate(a.date);
+  if (mode === "source") return a.source;
+  return "";
 }
 function groupLabel(k, mode) {
   if (mode === "topic") return topicName[k] || k;
   if (mode === "industry") return k === "_none" ? "No specific industry" : indName[k];
   if (mode === "location") return k === "_none" ? "No specific location" : locName[k];
+  if (mode === "date") return k === "undated" ? "Undated" : niceDate(new Date(k + "T00:00:00Z"));
   return k;
 }
 function groupOrder(mode) {
@@ -263,45 +297,67 @@ function groupOrder(mode) {
   return null;
 }
 
-function card(a) {
-  const tags = a.topics.filter(t => t !== "general").map(t => `<span class="tag${isDark(topicColor[t]) ? " solid" : ""}" style="--c:${topicColor[t]}">${esc(topicName[t])}</span>`)
-    .concat(a.industries.map(t => `<span class="tag ind">${esc(indName[t])}</span>`))
-    .concat(a.locations.map(t => `<span class="tag loc">${esc(locName[t])}</span>`))
-    .concat(a.cves.map(c => `<span class="tag cve">${esc(c)}</span>`));
-  if (a.also_reported_by.length) tags.unshift(`<span class="tag hot" title="${esc(a.also_reported_by.join(", "))}">${a.also_reported_by.length + 1} outlets</span>`);
+function thumb(a) {
+  const img = safeUrl(a.image);
+  const ph = `<span class="ph">${esc(a.source)}</span>`;
+  return `<a class="thumb" href="${esc(safeUrl(a.link) || "#")}" target="_blank" rel="noopener noreferrer" tabindex="-1" aria-hidden="true">${
+    img ? `<img src="${esc(img)}" alt="" loading="lazy" referrerpolicy="no-referrer" data-ph="${esc(a.source)}">` : ph}</a>`;
+}
+
+function item(a) {
+  const tags = [];
+  if (a.also_reported_by.length) tags.push(`<span class="t hot" title="Also: ${esc(a.also_reported_by.join(", "))}">${a.also_reported_by.length + 1} outlets</span>`);
+  a.topics.filter(t => t !== "general").forEach(t => tags.push(`<span class="t topic" style="--c:${topicColor[t]}">${esc(topicName[t])}</span>`));
+  a.industries.forEach(t => tags.push(`<span class="t">${esc(indName[t])}</span>`));
+  a.locations.forEach(t => tags.push(`<span class="t">${esc(locName[t])}</span>`));
+  a.cves.forEach(c => tags.push(`<span class="t cve">${esc(c)}</span>`));
   const sel = state.selected.has(a.i);
-  return `<article class="${sel ? "sel" : ""}" data-i="${a.i}" style="--c:${topicColor[a.topics[0]] || "var(--rule)"}">
-    <input type="checkbox" ${sel ? "checked" : ""} aria-label="Select for bulletin">
-    <div><h4><a href="${esc(safeUrl(a.link))}" target="_blank" rel="noopener noreferrer">${esc(a.title)}</a></h4>
-    <div class="meta"><span class="src">${esc(a.source)}</span> · ${fmtDate(a.date)}${a.also_reported_by.length ? " · also: " + esc(a.also_reported_by.join(", ")) : ""}</div>
-    ${a.summary ? `<p class="summary">${esc(a.summary)}</p>` : ""}
-    ${tags.length ? `<div class="tags">${tags.join("")}</div>` : ""}</div></article>`;
+  return `<article class="item${sel ? " sel" : ""}" data-i="${a.i}">
+    <h4><input type="checkbox" ${sel ? "checked" : ""} aria-label="Select for bulletin"><a href="${esc(safeUrl(a.link) || "#")}" target="_blank" rel="noopener noreferrer">${esc(a.title)}</a></h4>
+    <div class="byline"><span class="src">${esc(a.source)}</span> <span class="date">${niceDate(a.date)}</span>${tags.join("")}</div>
+    <div class="body">${thumb(a)}<p class="summary">${esc(a.summary)}</p></div>
+  </article>`;
+}
+
+function updateActions() {
+  $("selCount").textContent = `${state.selected.size} selected`;
+  $("copy").disabled = $("download").disabled = !state.selected.size;
 }
 
 function draw() {
   const list = visible(), mode = $("group").value;
-  $("count").textContent = `${list.length} shown · ${state.selected.size} selected`;
-  $("copy").disabled = $("download").disabled = !state.selected.size;
+  const nSrc = new Set(list.map(a => a.source)).size;
+  $("displaying").textContent = `Displaying ${list.length} article${list.length === 1 ? "" : "s"} from ${nSrc} source${nSrc === 1 ? "" : "s"}`;
+  document.querySelectorAll("[data-clear]").forEach(b => b.hidden = !state[b.dataset.clear].size);
+  $("timeClear").hidden = !state.days && !$("from").value;
+  updateActions();
   if (!list.length) { $("list").innerHTML = '<p class="empty">No articles match these filters.</p>'; return; }
   const groups = new Map();
-  list.forEach(a => groupKey(a, mode).forEach(k => { if (!groups.has(k)) groups.set(k, []); groups.get(k).push(a); }));
+  list.forEach(a => { const k = groupKey(a, mode); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(a); });
   let keys = [...groups.keys()];
   const order = groupOrder(mode);
   if (order) keys.sort((x, y) => order.indexOf(x) - order.indexOf(y));
   else if (mode === "date") keys.sort().reverse();
   else keys.sort();
-  $("list").innerHTML = keys.map(k => (mode === "none" ? "" : `<h2 class="group"${mode === "topic" ? ` style="--c:${topicColor[k]}"` : ""}>${esc(groupLabel(k, mode))} <span>${groups.get(k).length}</span></h2>`)
-    + groups.get(k).map(card).join("")).join("");
+  $("list").innerHTML = keys.map(k => (mode === "none" ? "" : `<h2 class="group">${esc(groupLabel(k, mode))}</h2>`)
+    + groups.get(k).map(item).join("")).join("");
 }
+
+// Broken images fall back to the source-name block.
+$("list").addEventListener("error", (e) => {
+  if (e.target.tagName !== "IMG") return;
+  const span = document.createElement("span");
+  span.className = "ph"; span.textContent = e.target.dataset.ph || "";
+  e.target.replaceWith(span);
+}, true);
 
 $("list").addEventListener("change", (e) => {
   if (e.target.type !== "checkbox") return;
   const el = e.target.closest("article"), i = +el.dataset.i;
   e.target.checked ? state.selected.add(i) : state.selected.delete(i);
   el.classList.toggle("sel", e.target.checked);
-  save();
-  $("count").textContent = `${visible().length} shown · ${state.selected.size} selected`;
-  $("copy").disabled = $("download").disabled = !state.selected.size;
+  save(); updateActions();
+  if ($("selOnly").checked) draw();
 });
 $("selAll").addEventListener("click", () => { visible().forEach(a => state.selected.add(a.i)); save(); draw(); });
 $("selNone").addEventListener("click", () => { state.selected.clear(); save(); draw(); });
@@ -319,7 +375,7 @@ function markdown() {
     lines.push(`## ${topicName[k]}`, ``);
     byTopic.get(k).forEach(a => {
       lines.push(`### ${a.title}`);
-      const meta = [`Source: [${a.source}](${a.link})`, fmtDate(a.date)];
+      const meta = [`Source: [${a.source}](${a.link})`, isoDate(a.date)];
       if (a.also_reported_by.length) meta.push(`also reported by ${a.also_reported_by.join(", ")}`);
       lines.push(meta.join(" · ") + "  ");
       if (a.industries.length) lines.push(`Sectors: ${a.industries.map(i => indName[i]).join(", ")}  `);

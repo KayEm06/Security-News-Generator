@@ -20,4 +20,4 @@ secnews = "secnews.cli:main"
 packages = ["secnews"]
 
 [tool.setuptools.package-data]
-secnews = ["data/*.json", "data/*.html"]
+secnews = ["data/*.json", "data/*.html", "data/*.svg"]

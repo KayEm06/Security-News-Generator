@@ -5,7 +5,7 @@ Pulls the latest cybersecurity news from ~30 sources, tags each article by **top
 - **Pure Python standard library**: Python 3.9+, nothing to install.
 - **Sources:** news outlets (BleepingComputer, The Hacker News, The Record, Krebs, SecurityWeek, Dark Reading…), vendor research (Talos, Unit 42, Microsoft, Google TI, Check Point, Sophos, ESET…), government (CISA, NCSC UK) and blogs (SANS ISC, Schneier).
 - **Filters:** category, industry, location, source, source type, date range, free text, CVE-only.
-- **Extras:** extracts CVE IDs, merges the same story when several outlets cover it ("3 outlets"), and reports feeds that fail without stopping the run.
+- **Extras:** shows each article's image when the feed provides one, extracts CVE IDs, merges the same story when several outlets cover it ("3 outlets"), and reports feeds that fail without stopping the run.
 - **Outputs:** interactive HTML, Markdown, JSON, CSV.
 
 ## Quick start

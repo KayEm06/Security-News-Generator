@@ -11,6 +11,7 @@ class Article:
     source: str
     published: datetime | None = None
     summary: str = ""
+    image: str = ""
     source_type: str = ""
     feed_tags: list[str] = field(default_factory=list)
     topics: list[str] = field(default_factory=list)

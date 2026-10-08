@@ -153,6 +153,44 @@ def _parse_xml(data: bytes):
         return ET.fromstring(text.encode("utf-8"))
 
 
+_IMG_TAG = re.compile(r"<img\b[^>]*>", re.IGNORECASE)
+_IMG_SRC = re.compile(r"""\bsrc\s*=\s*["']([^"']+)["']""", re.IGNORECASE)
+_TINY = re.compile(r"""\b(?:width|height)\s*=\s*["']?[01](?:px)?["'\s>/]""", re.IGNORECASE)
+_IMAGE_EXT = re.compile(r"\.(?:jpe?g|png|gif|webp|avif)(?:[?#]|$)", re.IGNORECASE)
+
+
+def _http(url: str | None) -> str:
+    url = html.unescape((url or "").strip())
+    return url if url.lower().startswith(("https://", "http://")) else ""
+
+
+def _find_image(el, *bodies: str) -> str:
+    """Article image from media:thumbnail/content, an image enclosure, or the first real <img> in the body."""
+    for c in el.iter():
+        name, url = _local(c.tag), c.get("url") or c.get("href")
+        typ, medium = c.get("type", ""), c.get("medium", "")
+        if name == "thumbnail" and url:
+            found = _http(url)
+        elif name == "content" and url and (medium == "image" or typ.startswith("image/") or _IMAGE_EXT.search(url)):
+            found = _http(url)
+        elif name == "enclosure" and url and typ.startswith("image/"):
+            found = _http(url)
+        elif name == "link" and c.get("rel") == "enclosure" and url and typ.startswith("image/"):
+            found = _http(url)
+        else:
+            continue
+        if found:
+            return found
+    for body in bodies:
+        for tag in _IMG_TAG.findall(body or ""):
+            if _TINY.search(tag):  # skip 1x1 tracking pixels
+                continue
+            m = _IMG_SRC.search(tag)
+            if m and _http(m.group(1)):
+                return _http(m.group(1))
+    return ""
+
+
 def parse_feed(data: bytes, source: Source) -> list[Article]:
     root = _parse_xml(data)
     root_name = _local(root.tag)
@@ -181,7 +219,8 @@ def _parse_rss_item(item, source: Source) -> Article | None:
         guid = _child(item, "guid")
         if guid is not None and (guid.text or "").startswith("http"):
             link = guid.text.strip()
-    body = _text(item, "description") or _text(item, "encoded")
+    description, encoded = _text(item, "description"), _text(item, "encoded")
+    body = description or encoded
     published = parse_date(_text(item, "pubDate") or _text(item, "date") or _text(item, "published"))
     tags = [html_to_text(c.text or "") for c in _children(item, "category", "subject") if c.text]
     return Article(
@@ -191,6 +230,7 @@ def _parse_rss_item(item, source: Source) -> Article | None:
         source_type=source.type,
         published=published,
         summary=truncate(html_to_text(body)),
+        image=_find_image(item, description, encoded),
         feed_tags=[t for t in tags if t],
     )
 
@@ -206,7 +246,8 @@ def _parse_atom_entry(entry, source: Source) -> Article | None:
     if not link:
         l = _child(entry, "link")
         link = l.get("href", "") if l is not None else ""
-    body = _text(entry, "summary") or _text(entry, "content")
+    summary, content = _text(entry, "summary"), _text(entry, "content")
+    body = summary or content
     published = parse_date(_text(entry, "published") or _text(entry, "updated"))
     tags = [c.get("term") or c.get("label") or "" for c in _children(entry, "category")]
     return Article(
@@ -216,6 +257,7 @@ def _parse_atom_entry(entry, source: Source) -> Article | None:
         source_type=source.type,
         published=published,
         summary=truncate(html_to_text(body)),
+        image=_find_image(entry, summary, content),
         feed_tags=[t for t in tags if t],
     )
 

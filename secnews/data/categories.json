@@ -395,11 +395,18 @@
         "pipeline",
         "Siemens",
         "Schneider Electric",
-        "Rockwell",
-        "IoT",
-        "router",
-        "routers",
-        "firmware"
+        "Rockwell"
+      ]
+    },
+    {
+      "id": "iot-hardware",
+      "name": "IoT & Hardware",
+      "color": "#0891b2",
+      "keywords": [
+        "IoT", "Internet of Things", "smart device", "smart devices", "smart home", "connected device",
+        "router", "routers", "firmware", "hardware", "chip", "chips", "processor", "CPU", "UEFI", "BIOS",
+        "camera", "cameras", "IP camera", "DVR", "NVR", "NAS", "printer", "printers", "embedded",
+        "Bluetooth", "Wi-Fi", "side-channel", "TPM"
       ]
     }
   ],

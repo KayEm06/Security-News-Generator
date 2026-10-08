@@ -142,8 +142,10 @@ def to_html(articles: list[Article], taxonomy: Taxonomy, meta: dict) -> str:
         "articles": [a.to_dict() for a in articles],
     }
     blob = json.dumps(data, ensure_ascii=False).replace("</", "<\\/")
-    template = (Path(__file__).parent / "data" / "report.html").read_text(encoding="utf-8")
-    return template.replace("/*__DATA__*/null", blob)
+    data_dir = Path(__file__).parent / "data"
+    template = (data_dir / "report.html").read_text(encoding="utf-8")
+    logo = (data_dir / "logo.svg").read_text(encoding="utf-8").strip()
+    return template.replace("<!--__LOGO__-->", logo).replace("/*__DATA__*/null", blob)
 
 
 RENDERERS = {"md": to_markdown, "html": to_html, "json": to_json, "csv": to_csv}
