@@ -5,7 +5,7 @@ Pulls the latest cybersecurity news from ~30 sources, tags each article by **top
 - **Pure Python standard library**: Python 3.9+, nothing to install.
 - **Sources:** news outlets (BleepingComputer, The Hacker News, The Record, Krebs, SecurityWeek, Dark Reading…), vendor research (Talos, Unit 42, Microsoft, Google TI, Check Point, Sophos, ESET…), government (CISA, NCSC UK) and blogs (SANS ISC, Schneier).
 - **Filters:** category, industry, location, source, source type, date range, free text, CVE-only.
-- **Extras:** shows each article's image when the feed provides one, extracts CVE IDs, merges the same story when several outlets cover it ("3 outlets"), and reports feeds that fail without stopping the run.
+- **Extras:** shows each article's picture (taken from the feed, or from the article page's share image when the feed has none), extracts CVE IDs, merges the same story when several outlets cover it ("3 outlets"), and reports feeds that fail without stopping the run.
 - **Outputs:** interactive HTML, Markdown, JSON, CSV.
 
 ## Quick start
@@ -70,6 +70,7 @@ Key `fetch` options:
 | `-o FILE` / `-f FORMAT` | Output file; the format comes from the extension (`.html .md .json .csv`). Without `-o`, Markdown goes to stdout |
 | `--input FILE.json` | Re-use a previous JSON snapshot instead of fetching |
 | `--no-merge` | Keep duplicate coverage of the same story as separate entries |
+| `--no-images` | Skip opening article pages to find pictures for articles whose feed has none. Faster; those articles show a source-name block instead |
 
 Filters are combined with AND across types (category **and** industry **and** location) and with OR within one type (`-c fraud -c phishing` means either).
 

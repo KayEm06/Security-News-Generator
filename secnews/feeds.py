@@ -8,6 +8,7 @@ import html.entities
 import re
 import urllib.request
 import zlib
+from urllib.parse import urljoin
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -153,42 +154,133 @@ def _parse_xml(data: bytes):
         return ET.fromstring(text.encode("utf-8"))
 
 
+# --------------------------------------------------------------------------- images
+
 _IMG_TAG = re.compile(r"<img\b[^>]*>", re.IGNORECASE)
-_IMG_SRC = re.compile(r"""\bsrc\s*=\s*["']([^"']+)["']""", re.IGNORECASE)
-_TINY = re.compile(r"""\b(?:width|height)\s*=\s*["']?[01](?:px)?["'\s>/]""", re.IGNORECASE)
+_TAG_ATTR = re.compile(r"""([a-zA-Z_:][\w:.-]*)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))""")
 _IMAGE_EXT = re.compile(r"\.(?:jpe?g|png|gif|webp|avif)(?:[?#]|$)", re.IGNORECASE)
+# Never the article picture: tracking pixels, author photos, emoji, share buttons, ads.
+_JUNK_IMAGE = re.compile(
+    r"pixel|spacer|blank\.gif|gravatar|avatar|/emoji|/smilies/|feedburner\.com/~|sprite|"
+    r"share[-_]?button|/ads?/|doubleclick",
+    re.IGNORECASE,
+)
+# Site chrome that shows up as <img> tags in page/feed bodies (a share image may legitimately be a logo).
+_CHROME_IMAGE = re.compile(r"(?<![a-z])(?:logos?|icons?|favicon|badges?)(?![a-z])|\.svg(?:[?#]|$)", re.IGNORECASE)
+_LAZY_SRC_ATTRS = ("data-src", "data-lazy-src", "data-original", "data-orig-file", "data-large-file", "src")
 
 
-def _http(url: str | None) -> str:
+def _attrs(tag: str) -> dict[str, str]:
+    return {m.group(1).lower(): html.unescape(m.group(2) or m.group(3) or m.group(4) or "") for m in _TAG_ATTR.finditer(tag)}
+
+
+def _http(url: str | None, base: str = "") -> str:
+    """Absolute http(s) URL, resolving relative paths against the article link; '' if unusable."""
     url = html.unescape((url or "").strip())
+    if not url:
+        return ""
+    if base and not url.lower().startswith(("http://", "https://")):
+        url = urljoin(base, url)
     return url if url.lower().startswith(("https://", "http://")) else ""
 
 
-def _find_image(el, *bodies: str) -> str:
-    """Article image from media:thumbnail/content, an image enclosure, or the first real <img> in the body."""
+def _too_small(attrs: dict[str, str]) -> bool:
+    for key in ("width", "height"):
+        m = re.match(r"\s*(\d+)", attrs.get(key, ""))
+        if m and int(m.group(1)) < 80:
+            return True
+    return False
+
+
+def _img_url(a: dict[str, str], base: str) -> str:
+    """Best source URL for one <img>, honouring lazy-load attributes and srcset; '' if it looks like chrome."""
+    if _too_small(a):
+        return ""
+    candidates = [a.get(k, "") for k in _LAZY_SRC_ATTRS]
+    srcset = a.get("srcset") or a.get("data-srcset") or ""
+    if srcset:  # take the last (usually largest) entry
+        candidates.append(srcset.split(",")[-1].strip().split(" ")[0])
+    for c in candidates:
+        url = _http(c, base)
+        if url and not _JUNK_IMAGE.search(url) and not _CHROME_IMAGE.search(url):
+            return url
+    return ""
+
+
+def _img_from_html(body: str, base: str = "") -> str:
+    """First plausible article picture in an HTML fragment."""
+    if not body:
+        return ""
+    if "<img" not in body.lower() and "&lt;img" in body.lower():
+        body = html.unescape(body)  # double-escaped HTML in some feeds
+    for tag in _IMG_TAG.findall(body):
+        url = _img_url(_attrs(tag), base)
+        if url:
+            return url
+    return ""
+
+
+def _find_image(el, *bodies: str, base: str = "") -> str:
+    """Article image from media:thumbnail/content, image enclosures, inline XHTML or the first real <img>."""
     for c in el.iter():
         name, url = _local(c.tag), c.get("url") or c.get("href")
         typ, medium = c.get("type", ""), c.get("medium", "")
+        is_image_type = typ.startswith("image/") or (not typ and url and _IMAGE_EXT.search(url))
         if name == "thumbnail" and url:
-            found = _http(url)
-        elif name == "content" and url and (medium == "image" or typ.startswith("image/") or _IMAGE_EXT.search(url)):
-            found = _http(url)
-        elif name == "enclosure" and url and typ.startswith("image/"):
-            found = _http(url)
-        elif name == "link" and c.get("rel") == "enclosure" and url and typ.startswith("image/"):
-            found = _http(url)
+            found = _http(url, base)
+        elif name == "content" and url and (medium == "image" or is_image_type):
+            found = _http(url, base)
+        elif name == "enclosure" and url and is_image_type:
+            found = _http(url, base)
+        elif name == "link" and c.get("rel") == "enclosure" and url and is_image_type:
+            found = _http(url, base)
+        elif name == "img":  # Atom type="xhtml" content keeps <img> as real elements
+            found = _img_url({k.lower(): v for k, v in c.attrib.items()}, base)
         else:
             continue
-        if found:
+        if found and not _JUNK_IMAGE.search(found):
             return found
     for body in bodies:
-        for tag in _IMG_TAG.findall(body or ""):
-            if _TINY.search(tag):  # skip 1x1 tracking pixels
-                continue
-            m = _IMG_SRC.search(tag)
-            if m and _http(m.group(1)):
-                return _http(m.group(1))
+        found = _img_from_html(body, base)
+        if found:
+            return found
     return ""
+
+
+_META_TAG = re.compile(r"<meta\b[^>]*>", re.IGNORECASE)
+_LINK_TAG = re.compile(r"<link\b[^>]*>", re.IGNORECASE)
+_JSONLD_IMAGE = re.compile(r'"image"\s*:\s*(?:\[\s*)?(?:\{[^{}]*?"url"\s*:\s*)?"([^"]+)"')
+_PAGE_IMAGE_KEYS = ("og:image:secure_url", "og:image", "og:image:url", "twitter:image", "twitter:image:src")
+MAX_PAGE_BYTES = 1024 * 1024
+
+
+def page_image(page: str, base: str) -> str:
+    """Main picture declared by an article web page: Open Graph / Twitter card, image_src, JSON-LD, then <img>."""
+    end = page.lower().find("</head>")
+    head = page[: end if end > 0 else 300_000]
+    found: dict[str, str] = {}
+    for tag in _META_TAG.findall(head):
+        a = _attrs(tag)
+        key = (a.get("property") or a.get("name") or a.get("itemprop") or "").lower()
+        if key in _PAGE_IMAGE_KEYS + ("image", "thumbnailurl") and a.get("content"):
+            found.setdefault(key, a["content"])
+    for key in _PAGE_IMAGE_KEYS + ("image", "thumbnailurl"):
+        url = _http(found.get(key), base)
+        if url and not _JUNK_IMAGE.search(url):
+            return url
+    for tag in _LINK_TAG.findall(head):
+        a = _attrs(tag)
+        if a.get("rel", "").lower() == "image_src":
+            url = _http(a.get("href"), base)
+            if url:
+                return url
+    for m in _JSONLD_IMAGE.finditer(page):
+        url = _http(m.group(1).replace("\\/", "/"), base)
+        if url and not _JUNK_IMAGE.search(url):
+            return url
+    body = page[end:] if end > 0 else page
+    art = re.search(r"<article\b.*?</article>", body, re.IGNORECASE | re.DOTALL)
+    return _img_from_html(art.group(0) if art else body, base)
 
 
 def parse_feed(data: bytes, source: Source) -> list[Article]:
@@ -230,7 +322,7 @@ def _parse_rss_item(item, source: Source) -> Article | None:
         source_type=source.type,
         published=published,
         summary=truncate(html_to_text(body)),
-        image=_find_image(item, description, encoded),
+        image=_find_image(item, description, encoded, base=link.strip()),
         feed_tags=[t for t in tags if t],
     )
 
@@ -257,7 +349,7 @@ def _parse_atom_entry(entry, source: Source) -> Article | None:
         source_type=source.type,
         published=published,
         summary=truncate(html_to_text(body)),
-        image=_find_image(entry, summary, content),
+        image=_find_image(entry, summary, content, base=link.strip()),
         feed_tags=[t for t in tags if t],
     )
 
@@ -265,22 +357,25 @@ def _parse_atom_entry(entry, source: Source) -> Article | None:
 # --------------------------------------------------------------------------- fetching
 
 
-def _download(url: str, timeout: float) -> bytes:
+FEED_ACCEPT = "application/rss+xml, application/atom+xml, application/xml;q=0.9, text/xml;q=0.9, */*;q=0.5"
+PAGE_ACCEPT = "text/html,application/xhtml+xml;q=0.9,*/*;q=0.5"
+
+
+def _download(url: str, timeout: float, accept: str = FEED_ACCEPT, max_bytes: int = MAX_FEED_BYTES,
+              truncate_ok: bool = False) -> bytes:
     req = urllib.request.Request(
         url,
-        headers={
-            "User-Agent": USER_AGENT,
-            "Accept": "application/rss+xml, application/atom+xml, application/xml;q=0.9, text/xml;q=0.9, */*;q=0.5",
-            "Accept-Encoding": "gzip, deflate",
-        },
+        headers={"User-Agent": USER_AGENT, "Accept": accept, "Accept-Encoding": "gzip, deflate"},
     )
-    with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 - URLs come from local config
-        data = resp.read(MAX_FEED_BYTES + 1)
+    with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 - feed URLs come from local config
+        data = resp.read(max_bytes + 1)
         encoding = (resp.headers.get("Content-Encoding") or "").lower()
-    if len(data) > MAX_FEED_BYTES:
-        raise ValueError("feed larger than 10 MB")
+    if len(data) > max_bytes:
+        if not truncate_ok:
+            raise ValueError(f"response larger than {max_bytes // (1024 * 1024)} MB")
+        data = data[:max_bytes]
     if encoding == "gzip":
-        data = gzip.decompress(data)
+        data = zlib.decompressobj(16 + zlib.MAX_WBITS).decompress(data) if truncate_ok else gzip.decompress(data)
     elif encoding == "deflate":
         data = zlib.decompress(data)
     return data
@@ -303,3 +398,23 @@ def fetch_all(sources: list[Source], workers: int = 10, timeout: float = 20.0) -
         return []
     with ThreadPoolExecutor(max_workers=max(1, min(workers, len(sources)))) as pool:
         return list(pool.map(lambda s: fetch_source(s, timeout), sources))
+
+
+def _lookup_page_image(article: Article, timeout: float) -> str:
+    try:
+        data = _download(article.link, timeout, accept=PAGE_ACCEPT, max_bytes=MAX_PAGE_BYTES, truncate_ok=True)
+        return page_image(data.decode("utf-8", errors="replace"), article.link)
+    except Exception:  # a page we can't read just keeps the placeholder
+        return ""
+
+
+def fetch_page_images(articles: list[Article], workers: int = 10, timeout: float = 10.0, limit: int = 500) -> int:
+    """Fill in ``image`` for articles whose feed had none by reading the article page. Returns how many were found."""
+    todo = [a for a in articles if not a.image and a.link.lower().startswith(("https://", "http://", "file://"))][:limit]
+    if not todo:
+        return 0
+    with ThreadPoolExecutor(max_workers=max(1, min(workers, len(todo)))) as pool:
+        images = list(pool.map(lambda a: _lookup_page_image(a, timeout), todo))
+    for art, img in zip(todo, images):
+        art.image = img
+    return sum(1 for img in images if img)

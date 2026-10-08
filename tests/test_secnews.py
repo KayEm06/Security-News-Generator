@@ -9,7 +9,7 @@ from pathlib import Path
 from secnews.classify import Classifier, deduplicate, filter_articles, normalize_url, resolve_ids
 from secnews.cli import main
 from secnews.config import Source, load_sources, load_taxonomy
-from secnews.feeds import fetch_source, parse_date, parse_feed
+from secnews.feeds import fetch_source, page_image, parse_date, parse_feed
 from secnews.models import Article
 
 FIX = Path(__file__).parent / "fixtures"
@@ -59,6 +59,46 @@ class ParsingTests(unittest.TestCase):
         self.assertEqual(arts[0].image, "https://img.example.com/charity.jpg?w=320&h=180")  # media:thumbnail
         self.assertEqual(arts[1].image, "https://img.example.com/factory.png")  # skips 1x1 tracking pixel
         self.assertEqual(parse("rdf.xml")[0].image, "")
+
+    def test_images_in_harder_feed_markup(self):
+        feed = b"""<?xml version="1.0"?>
+<rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/"><channel>
+<item><title>Lazy</title><link>https://n.example.com/2026/10/lazy</link>
+  <description><![CDATA[<img src="data:image/gif;base64,R0lGOD" data-lazy-src="/wp-content/uploads/lazy.jpg">]]></description></item>
+<item><title>Srcset</title><link>https://n.example.com/a</link>
+  <content:encoded><![CDATA[<img srcset="https://n.example.com/s.jpg 300w, https://n.example.com/l.jpg 1024w">]]></content:encoded></item>
+<item><title>Escaped</title><link>https://n.example.com/b</link>
+  <description>&amp;lt;img src="https://n.example.com/esc.jpg"&amp;gt;</description></item>
+<item><title>Enclosure</title><link>https://n.example.com/c</link><enclosure url="https://n.example.com/enc.webp" length="0"/></item>
+<item><title>Chrome first</title><link>https://n.example.com/d</link>
+  <description><![CDATA[<img src="https://n.example.com/site-logo.png"><img src="https://n.example.com/icons/x.png"><img src="https://n.example.com/silicon-chip.jpg">]]></description></item>
+</channel></rss>"""
+        imgs = [a.image for a in parse_feed(feed, Source("T", "x"))]
+        self.assertEqual(imgs, [
+            "https://n.example.com/wp-content/uploads/lazy.jpg",  # lazy-load attribute, relative path resolved
+            "https://n.example.com/l.jpg",  # largest srcset entry
+            "https://n.example.com/esc.jpg",  # double-escaped HTML
+            "https://n.example.com/enc.webp",  # untyped enclosure with an image extension
+            "https://n.example.com/silicon-chip.jpg",  # logo/icon skipped, "silicon" isn't an icon
+        ])
+
+    def test_atom_xhtml_image(self):
+        feed = b"""<feed xmlns="http://www.w3.org/2005/Atom"><entry><title>X</title>
+<link href="https://a.example.org/post"/><content type="xhtml"><div xmlns="http://www.w3.org/1999/xhtml">
+<p>Text</p><img src="/media/pic.png" width="640"/></div></content></entry></feed>"""
+        self.assertEqual(parse_feed(feed, Source("T", "x"))[0].image, "https://a.example.org/media/pic.png")
+
+    def test_page_image(self):
+        base = "https://site.example/news/story"
+        og = '<head><meta content="https://cdn.example/og.jpg" property="og:image"><meta name="twitter:image" content="https://cdn.example/tw.jpg"></head>'
+        self.assertEqual(page_image(og, base), "https://cdn.example/og.jpg")
+        self.assertEqual(page_image('<head><meta name="twitter:image" content="/tw.jpg"></head>', base), "https://site.example/tw.jpg")
+        self.assertEqual(page_image('<head><link rel="image_src" href="https://cdn.example/s.jpg"></head>', base), "https://cdn.example/s.jpg")
+        jsonld = '<head><script type="application/ld+json">{"@type":"NewsArticle","image":{"@type":"ImageObject","url":"https:\\/\\/cdn.example\\/ld.jpg"}}</script></head>'
+        self.assertEqual(page_image(jsonld, base), "https://cdn.example/ld.jpg")
+        body = '<head></head><body><img src="/logo.png"><article><img src="/a/1x1.gif" width="1"><img src="/a/main.jpg"></article></body>'
+        self.assertEqual(page_image(body, base), "https://site.example/a/main.jpg")
+        self.assertEqual(page_image("<head><title>none</title></head><body><p>x</p></body>", base), "")
 
     def test_html_page_reports_error(self):
         r = fetch_source(Source("Blocked", (FIX / "blocked.html").as_uri()))
@@ -184,11 +224,27 @@ class CliTests(unittest.TestCase):
         self.sources = self.tmp / "sources.json"
         self.sources.write_text(json.dumps({"sources": feeds}))
 
-    def run_cli(self, *args):
+    def run_cli(self, *args, images=False):
         out, err = io.StringIO(), io.StringIO()
+        if args and args[0] == "fetch" and not images:
+            args = (*args, "--no-images")  # fixture links point at example.com; keep tests offline
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
             code = main(["--sources-file", str(self.sources), *args])
         return code, out.getvalue(), err.getvalue()
+
+    def test_page_image_lookup(self):
+        page = self.tmp / "article.html"
+        page.write_text('<html><head><meta property="og:image" content="https://cdn.example/hero.jpg"></head><body></body></html>')
+        feed = self.tmp / "feed.xml"
+        feed.write_text(f"""<rss version="2.0"><channel><item><title>Ransomware hits council</title>
+            <link>{page.as_uri()}</link><pubDate>Mon, 05 Oct 2026 09:00:00 +0000</pubDate>
+            <description>No picture in the feed.</description></item></channel></rss>""")
+        self.sources.write_text(json.dumps({"sources": [{"name": "Local", "url": feed.as_uri()}]}))
+        out = self.tmp / "r.json"
+        code, _, err = self.run_cli("fetch", "--since", "2026-09-30", "-o", str(out), images=True)
+        self.assertEqual(code, 0, err)
+        self.assertIn("found 1", err)
+        self.assertEqual(json.loads(out.read_text())["articles"][0]["image"], "https://cdn.example/hero.jpg")
 
     def test_all_formats(self):
         common = ["fetch", "--since", "2026-09-30", "--until", "2026-10-07"]
