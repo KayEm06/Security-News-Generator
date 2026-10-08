@@ -1,0 +1,10 @@
+<?xml version="1.0"?>
+<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns="http://purl.org/rss/1.0/" xmlns:dc="http://purl.org/dc/elements/1.1/">
+  <channel rdf:about="https://isc.example.net/"><title>ISC</title></channel>
+  <item rdf:about="https://isc.example.net/diary/1">
+    <title>Phishing campaign abuses QR codes to steal Microsoft 365 credentials</title>
+    <link>https://isc.example.net/diary/1</link>
+    <dc:date>2026-10-02T12:00:00+00:00</dc:date>
+    <description>A quishing lure targeting university students.</description>
+  </item>
+</rdf:RDF>

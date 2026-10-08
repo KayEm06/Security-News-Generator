@@ -1,0 +1,81 @@
+# Rebuilds the news site every 4 hours.
+# - Always: keeps a downloadable copy of the site (Actions run > Artifacts > news-site).
+# - Optional: publishes it on GitHub Pages. Turn on by adding a repository variable
+#   PUBLISH_SITE = true and setting Settings > Pages > Source to "GitHub Actions".
+# Scheduled runs only start once this file is on the default branch (main).
+name: Update news site
+
+on:
+  schedule:
+    - cron: "17 */4 * * *" # every 4 hours (UTC)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Shared with the briefing workflow so the two never update the archive at the same time.
+concurrency:
+  group: secnews-archive
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Restore article archive
+        id: archive
+        uses: actions/cache/restore@v4
+        with:
+          path: .secnews
+          key: secnews-archive-${{ github.run_id }}
+          restore-keys: secnews-archive-
+
+      - name: Fetch news and build the site
+        # On the very first run (no archive yet) also pull older feed pages to start with some history.
+        run: >
+          python -m secnews fetch
+          --archive .secnews/archive.json
+          --backfill ${{ steps.archive.outputs.cache-matched-key == '' && '5' || '0' }}
+          -o site/index.html
+
+      - name: Save article archive
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .secnews
+          key: secnews-archive-${{ github.run_id }}
+
+      - name: Keep a downloadable copy
+        uses: actions/upload-artifact@v4
+        with:
+          name: news-site
+          path: site/
+          retention-days: 7
+
+      - name: Prepare GitHub Pages upload
+        if: vars.PUBLISH_SITE == 'true'
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: site/
+
+  deploy:
+    needs: build
+    if: vars.PUBLISH_SITE == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Publish to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

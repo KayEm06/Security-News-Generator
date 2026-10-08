@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "secnews"
+version = "0.1.0"
+description = "Pull, categorise and filter cybersecurity news to help build a weekly threat intelligence bulletin"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = []
+
+[project.optional-dependencies]
+hardened = ["defusedxml>=0.7"]
+
+[project.scripts]
+secnews = "secnews.cli:main"
+
+[tool.setuptools]
+packages = ["secnews"]
+
+[tool.setuptools.package-data]
+secnews = ["data/*.json", "data/*.html", "data/*.svg"]

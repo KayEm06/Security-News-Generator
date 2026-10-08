@@ -1,0 +1,67 @@
+# Emails the daily briefing every morning.
+# Needs these repository secrets (Settings > Secrets and variables > Actions):
+#   SECNEWS_SMTP_HOST, SECNEWS_SMTP_USER, SECNEWS_SMTP_PASSWORD   (required)
+#   SECNEWS_SMTP_FROM, SECNEWS_SMTP_PORT, SECNEWS_SMTP_SECURITY   (optional)
+#   SECNEWS_SUBSCRIBERS   one email address per line (kept secret so the list isn't in the repo)
+# Scheduled runs only start once this file is on the default branch (main).
+name: Daily briefing email
+
+on:
+  schedule:
+    - cron: "47 6 * * *" # 06:47 UTC daily = 07:47 UK summer time, 06:47 winter
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: secnews-archive
+  cancel-in-progress: false
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Restore article archive
+        uses: actions/cache/restore@v4
+        with:
+          path: .secnews
+          key: secnews-archive-${{ github.run_id }}
+          restore-keys: secnews-archive-
+
+      - name: Send the briefing
+        env:
+          SECNEWS_SMTP_HOST: ${{ secrets.SECNEWS_SMTP_HOST }}
+          SECNEWS_SMTP_PORT: ${{ secrets.SECNEWS_SMTP_PORT }}
+          SECNEWS_SMTP_USER: ${{ secrets.SECNEWS_SMTP_USER }}
+          SECNEWS_SMTP_PASSWORD: ${{ secrets.SECNEWS_SMTP_PASSWORD }}
+          SECNEWS_SMTP_FROM: ${{ secrets.SECNEWS_SMTP_FROM }}
+          SECNEWS_SMTP_SECURITY: ${{ secrets.SECNEWS_SMTP_SECURITY }}
+          SUBSCRIBERS: ${{ secrets.SECNEWS_SUBSCRIBERS }}
+        run: |
+          printf '%s\n' "$SUBSCRIBERS" | tr ',;' '\n\n' > subscribers.txt
+          python -m secnews briefing --archive .secnews/archive.json --subscribers subscribers.txt --send -o briefing.html
+          rm -f subscribers.txt
+
+      - name: Save article archive
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .secnews
+          key: secnews-archive-${{ github.run_id }}
+
+      - name: Keep a copy of the email
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: daily-briefing
+          path: briefing.html
+          if-no-files-found: ignore
+          retention-days: 14

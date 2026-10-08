@@ -1,0 +1,658 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>sanitised. Security News</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,500;0,600;0,700;0,800;1,700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --maroon: #5a0000; --maroon-text: #6b0000; --navy: #000d4c; --navy-2: #0b1a66; --red: #cc0000; --live: #e10600;
+  --rule: #8b1a1a; --ink: #000; --text: #1a1a1a; --muted: #666; --faint: #b5b5b5; --line: #e3e3e3; --soft: #f5f5f7;
+  --bg: #fff; --font: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.4 var(--font); }
+button, input, select { font-family: var(--font); }
+a { color: inherit; }
+.wrap { max-width: 1272px; margin: 0 auto; padding: 0 16px; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+/* ---- Masthead ---- */
+.brand { background: var(--maroon); color: #fff; }
+.brand .wrap { display: flex; align-items: center; gap: 20px; min-height: 58px; padding-top: 10px; padding-bottom: 10px; flex-wrap: wrap; }
+.logo { display: flex; align-items: flex-end; gap: 20px; color: #fff; text-decoration: none; margin-right: auto; }
+.logo svg { width: 127px; height: 27px; flex: none; display: block; }
+.tagline { font-size: 14px; line-height: 1; padding-bottom: 2px; }
+.search { position: relative; width: 280px; max-width: 100%; }
+.search input { width: 100%; height: 34px; border: 0; border-radius: 0; padding: 0 34px 0 12px; font-size: 14px; background: #fff; color: var(--ink); }
+.search input::placeholder { color: #777; }
+.search input:focus { outline: 2px solid #fff; outline-offset: 2px; }
+.search svg { position: absolute; right: 10px; top: 9px; width: 16px; height: 16px; color: var(--navy); pointer-events: none; }
+@media (max-width: 760px) { .tagline { display: none; } .search { width: 100%; } }
+
+/* ---- Section navigation ---- */
+.nav { background: var(--navy); position: sticky; top: 0; z-index: 20; }
+.nav .wrap { display: flex; align-items: stretch; overflow-x: auto; scrollbar-width: none; position: relative; }
+.nav .wrap::-webkit-scrollbar { display: none; }
+.nav a { color: #fff; text-decoration: none; font-size: 14px; font-weight: 500; line-height: 40px; padding: 0 14px; white-space: nowrap; border-bottom: 3px solid transparent; }
+.nav a:first-child { padding-left: 0; }
+.nav a:hover, .nav a:focus-visible { background: var(--navy-2); outline: none; }
+.nav a[aria-current="page"] { border-bottom-color: #fff; font-weight: 700; }
+.nav .spacer { flex: 1 0 12px; }
+.nav .pill { display: inline-block; min-width: 18px; padding: 0 5px; margin-left: 5px; border-radius: 9px; background: var(--live); color: #fff; font-size: 11px; font-weight: 700; line-height: 18px; text-align: center; vertical-align: 1px; }
+.nav .count { opacity: .7; font-weight: 500; margin-left: 4px; }
+
+/* ---- Live strip ---- */
+.live { border-bottom: 1px solid var(--line); background: var(--soft); }
+.live .wrap { display: flex; align-items: center; gap: 12px; min-height: 40px; }
+.live-badge { display: inline-flex; align-items: center; gap: 6px; background: var(--live); color: #fff; font-size: 11px; font-weight: 800; letter-spacing: .08em; padding: 3px 8px; flex: none; }
+.live-badge i { width: 7px; height: 7px; border-radius: 50%; background: #fff; animation: pulse 1.4s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .25; } }
+@media (prefers-reduced-motion: reduce) { .live-badge i { animation: none; } }
+.live-item { min-width: 0; display: flex; gap: 10px; align-items: baseline; transition: opacity .35s; }
+.live-item.fade { opacity: 0; }
+.live-time { color: var(--live); font-weight: 700; font-size: 13px; flex: none; }
+.live-item a { font-weight: 700; color: var(--ink); text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.live-item a:hover { text-decoration: underline; }
+.live-src { color: var(--navy); font-size: 13px; flex: none; }
+@media (max-width: 760px) { .live-src { display: none; } }
+
+/* ---- Layout ---- */
+.layout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 36px; padding-top: 22px; padding-bottom: 60px; }
+@media (max-width: 960px) { .layout { grid-template-columns: 1fr; } }
+
+/* ---- Shared story bits ---- */
+.kicker { font-size: 11.5px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: color-mix(in srgb, var(--c, var(--maroon-text)) 78%, black); text-decoration: none; }
+.kicker:hover { text-decoration: underline; }
+.title a { color: var(--ink); text-decoration: none; }
+.title a:hover { text-decoration: underline; }
+.byline { font-size: 12.5px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; }
+.byline .src { color: var(--navy); font-weight: 600; }
+.byline .when { color: var(--maroon-text); }
+.byline .also { color: var(--maroon-text); font-weight: 600; }
+.byline .watch { background: #fff1f0; color: var(--live); font-weight: 700; padding: 1px 6px; font-size: 11.5px; }
+.cves { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px; }
+.cves span { font-size: 11.5px; color: var(--red); border: 1px solid #f1c4c4; padding: 0 5px; }
+.thumb { display: block; width: 100%; aspect-ratio: 16 / 9; overflow: hidden; background: var(--navy); }
+.thumb img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .3s; }
+a.thumb:hover img { transform: scale(1.03); }
+.ph { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; padding: 10px; text-align: center; color: #fff; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; line-height: 1.2; font-size: 13px; }
+.save { border: 1px solid var(--line); background: #fff; color: var(--navy); cursor: pointer; display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; padding: 3px 8px; }
+.save svg { width: 13px; height: 13px; }
+.save:hover { border-color: var(--navy); }
+.save[aria-pressed="true"] { background: var(--navy); color: #fff; border-color: var(--navy); }
+.save[aria-pressed="true"] svg { fill: currentColor; }
+
+/* Lead + latest column */
+.front { display: grid; grid-template-columns: minmax(0, 1.85fr) minmax(0, 1fr); gap: 28px; padding-bottom: 26px; border-bottom: 3px solid var(--navy); }
+@media (max-width: 760px) { .front { grid-template-columns: 1fr; } }
+.lead .title { font-size: 30px; line-height: 1.12; font-weight: 800; letter-spacing: -.015em; margin: 6px 0 10px; }
+.lead .thumb .ph { font-size: 22px; }
+.lead p { font-size: 15px; line-height: 1.5; margin: 0 0 12px; }
+.lead .meta-row { display: flex; justify-content: space-between; gap: 10px; align-items: center; margin-top: 12px; }
+.side-head, .sec-head h2 { margin: 0; font-size: 20px; font-weight: 800; color: var(--ink); letter-spacing: -.01em; }
+.side-head { padding-bottom: 8px; border-bottom: 2px solid var(--maroon); margin-bottom: 4px; }
+.headlines { list-style: none; margin: 0; padding: 0; }
+.headlines li { padding: 11px 0; border-bottom: 1px solid var(--line); display: grid; grid-template-columns: 54px 1fr; gap: 10px; }
+.headlines time { color: var(--live); font-size: 12px; font-weight: 700; padding-top: 2px; }
+.headlines a { font-weight: 700; color: var(--ink); text-decoration: none; line-height: 1.3; }
+.headlines a:hover { text-decoration: underline; }
+.headlines .s { display: block; font-size: 12px; color: var(--navy); margin-top: 3px; }
+
+/* Category sections on the front page */
+.section { padding: 24px 0 8px; border-bottom: 1px solid var(--line); }
+.sec-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 14px; border-top: 4px solid var(--c, var(--navy)); padding-top: 8px; }
+.sec-head a { font-size: 13px; font-weight: 700; color: var(--navy); text-decoration: none; white-space: nowrap; }
+.sec-head a:hover { text-decoration: underline; }
+.tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
+@media (max-width: 760px) { .tiles { grid-template-columns: 1fr; } }
+.tile .title { font-size: 15.5px; font-weight: 700; line-height: 1.3; margin: 8px 0 6px; }
+.tile .byline { margin-top: 6px; }
+
+/* Row list (More stories, sections, search, saved) */
+.page-head { margin: 0 0 6px; font-size: 34px; font-weight: 800; color: var(--ink); letter-spacing: -.02em; border-top: 6px solid var(--c, var(--navy)); padding-top: 10px; }
+.page-sub { color: var(--muted); margin: 0 0 14px; }
+.more-head { margin: 28px 0 4px; }
+.rows { border-top: 1px solid var(--line); }
+.row { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 16px; padding: 16px 0; border-bottom: 1px solid var(--line); }
+@media (max-width: 560px) { .row { grid-template-columns: 110px minmax(0, 1fr); gap: 12px; } .row p { display: none; } }
+.row .title { font-size: 17px; font-weight: 700; line-height: 1.3; margin: 4px 0 6px; }
+.row p { margin: 0 0 8px; font-size: 13.5px; line-height: 1.45; color: var(--text); }
+.row .bottom { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.load-more { display: block; width: 100%; margin: 20px 0 0; padding: 12px; background: #fff; border: 2px solid var(--navy); color: var(--navy); font-size: 14px; font-weight: 800; cursor: pointer; letter-spacing: .02em; }
+.load-more:hover { background: var(--navy); color: #fff; }
+.empty { font-size: 14.5px; color: var(--muted); padding: 26px 0; line-height: 1.55; }
+.widen, .btn { display: inline-block; margin-top: 8px; background: var(--navy); color: #fff; border: 0; padding: 7px 14px; font-size: 13px; font-weight: 700; cursor: pointer; text-decoration: none; }
+.widen:hover, .btn:hover { background: var(--maroon); }
+.active-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); margin-bottom: 14px; }
+.active-filters .chip { background: var(--soft); border: 1px solid var(--line); color: var(--text); padding: 2px 8px; }
+.active-filters button { background: none; border: 0; color: var(--red); cursor: pointer; font-size: 13px; padding: 0; }
+
+/* ---- Right rail ---- */
+aside > * + * { margin-top: 26px; }
+.box { border: 1px solid var(--line); }
+.box h3 { margin: 0; font-size: 15px; font-weight: 800; color: #fff; background: var(--navy); padding: 9px 14px; display: flex; justify-content: space-between; align-items: center; }
+.box h3 a { color: #fff; font-size: 12px; font-weight: 600; }
+.box .in { padding: 14px; }
+.brief { background: var(--maroon); color: #fff; padding: 18px; }
+.brief h3 { margin: 0 0 4px; font-size: 20px; font-weight: 800; }
+.brief p { margin: 0 0 12px; font-size: 13.5px; line-height: 1.45; opacity: .92; }
+.brief form { display: flex; }
+.brief input { flex: 1; min-width: 0; height: 36px; border: 0; padding: 0 10px; font-size: 14px; border-radius: 0; }
+.brief input:focus { outline: 2px solid #fff; outline-offset: 1px; }
+.brief button { height: 36px; border: 0; background: var(--navy); color: #fff; font-weight: 800; padding: 0 14px; cursor: pointer; font-size: 13px; }
+.brief button:hover { background: #000; }
+.brief .note { font-size: 12.5px; margin: 10px 0 0; min-height: 1em; }
+.watch-form { display: flex; gap: 0; }
+.watch-form input { flex: 1; min-width: 0; height: 32px; border: 1px solid var(--navy); border-right: 0; padding: 0 8px; font-size: 13px; border-radius: 0; }
+.watch-form input:focus { outline: 2px solid var(--red); outline-offset: -2px; }
+.watch-form button { height: 32px; border: 0; background: var(--navy); color: #fff; font-weight: 700; padding: 0 12px; cursor: pointer; }
+.hint { font-size: 12px; color: var(--muted); margin: 6px 0 0; }
+.watched { list-style: none; margin: 12px 0 0; padding: 0; }
+.watched li { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+.watched b { font-weight: 700; color: var(--ink); }
+.watched .n { color: var(--muted); font-size: 12px; margin-left: 6px; }
+.watched .n.hot { color: var(--live); font-weight: 700; }
+.x { background: none; border: 0; color: var(--muted); cursor: pointer; font-size: 16px; line-height: 1; padding: 0 2px; }
+.x:hover { color: var(--red); }
+.trending { list-style: none; margin: 0; padding: 0; }
+.trending li { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+.trending .cve { font-weight: 700; color: var(--red); }
+.trending .n { color: var(--muted); font-size: 12px; }
+.trending button { background: none; border: 1px solid var(--navy); color: var(--navy); font-size: 11.5px; font-weight: 700; cursor: pointer; padding: 1px 7px; }
+.trending button:disabled { border-color: var(--line); color: var(--faint); cursor: default; }
+.mini-link { display: inline-block; margin-top: 10px; font-size: 13px; font-weight: 700; color: var(--navy); }
+
+/* Refine (filters) */
+details.refine { border: 1px solid var(--line); }
+details.refine > summary { list-style: none; cursor: pointer; font-size: 15px; font-weight: 800; color: #fff; background: var(--navy); padding: 9px 14px; display: flex; justify-content: space-between; }
+details.refine > summary::-webkit-details-marker { display: none; }
+details.refine > summary::after { content: "+"; font-weight: 700; }
+details.refine[open] > summary::after { content: "–"; }
+.refine .in { padding: 4px 14px 14px; }
+.refine section { padding: 12px 0; border-bottom: 1px solid var(--rule); }
+.refine section:last-child { border-bottom: 0; }
+.f-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+.f-head h4 { margin: 0; font-size: 14px; font-weight: 700; color: var(--ink); }
+.clear { background: none; border: 0; padding: 0; color: var(--red); font-size: 12px; cursor: pointer; }
+.clear[hidden] { display: none; }
+.fsearch, .datein { width: 100%; height: 25px; border: 0; border-radius: 0; background: var(--navy); color: #fff; font-size: 12px; font-weight: 700; padding: 0 6px; margin-bottom: 10px; }
+.fsearch::placeholder { color: #fff; opacity: 1; }
+.fsearch:focus, .datein:focus { outline: 2px solid var(--red); }
+.datein { color-scheme: dark; font-weight: 500; margin: 6px 0 0; }
+.opts { max-height: 230px; overflow-y: auto; }
+.opt { display: block; width: 100%; text-align: left; background: none; border: 0; padding: 0; margin: 0; font-size: 12.5px; line-height: 17px; color: var(--text); cursor: pointer; }
+.opt:hover { color: var(--navy); text-decoration: underline; }
+.opt[aria-pressed="true"] { font-weight: 700; color: var(--maroon-text); }
+.opt[aria-pressed="true"]::before { content: "■ "; font-size: 9px; vertical-align: 1px; }
+.opt:disabled { color: var(--faint); cursor: default; text-decoration: none; }
+.opt[hidden] { display: none; }
+.label { display: block; font-size: 12px; color: var(--muted); margin-top: 8px; }
+label.check { display: flex; gap: 6px; align-items: center; font-size: 12.5px; cursor: pointer; }
+label.check input { accent-color: var(--navy); margin: 0; }
+
+.foot { border-top: 3px solid var(--navy); padding: 18px 0 30px; color: var(--muted); font-size: 12.5px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><div class="wrap">
+    <a class="logo" href="#/latest" aria-label="sanitised. home"><!--__LOGO__--><span class="tagline">The all-in-one tool for all of your security related news</span></a>
+    <form class="search" role="search" onsubmit="return false">
+      <label class="sr" for="q">Search articles</label>
+      <input id="q" type="search" placeholder="Search articles" autocomplete="off">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+    </form>
+  </div></div>
+  <nav class="nav" aria-label="Sections"><div class="wrap" id="sections"></div></nav>
+  <div class="live" aria-live="off"><div class="wrap">
+    <span class="live-badge"><i></i>LIVE</span>
+    <div class="live-item" id="live"></div>
+  </div></div>
+</header>
+
+<div class="wrap layout">
+  <main id="main"></main>
+
+  <aside>
+    <div class="brief" id="brief">
+      <h3>Daily briefing</h3>
+      <p>The day's most important security stories, in your inbox every morning.</p>
+      <form id="briefForm" novalidate>
+        <label class="sr" for="briefEmail">Email address</label>
+        <input id="briefEmail" type="email" placeholder="Your email address" autocomplete="email" required>
+        <button type="submit">Subscribe</button>
+      </form>
+      <p class="note" id="briefNote" role="status"></p>
+    </div>
+
+    <div class="box">
+      <h3>CVE Watch <a href="#/cve">Open</a></h3>
+      <div class="in">
+        <form class="watch-form" id="watchForm">
+          <label class="sr" for="watchInput">CVE or product to watch</label>
+          <input id="watchInput" placeholder="CVE-2026-12345 or product" autocomplete="off">
+          <button type="submit">Watch</button>
+        </form>
+        <p class="hint">Get flagged when a story mentions a CVE or product you care about.</p>
+        <ul class="watched" id="watchedList"></ul>
+      </div>
+    </div>
+
+    <div class="box">
+      <h3>Trending CVEs</h3>
+      <div class="in"><ul class="trending" id="trending"></ul></div>
+    </div>
+
+    <details class="refine" id="refine">
+      <summary>Refine stories</summary>
+      <div class="in">
+        <section>
+          <div class="f-head"><h4>Industry</h4><button class="clear" data-clear="industries">Clear</button></div>
+          <input class="fsearch" type="search" placeholder="Search" aria-label="Search industries" data-for="industries">
+          <div class="opts" id="industries"></div>
+        </section>
+        <section>
+          <div class="f-head"><h4>Location</h4><button class="clear" data-clear="locations">Clear</button></div>
+          <input class="fsearch" type="search" placeholder="Search" aria-label="Search locations" data-for="locations">
+          <div class="opts" id="locations"></div>
+        </section>
+        <section>
+          <div class="f-head"><h4>Source</h4><button class="clear" data-clear="sources">Clear</button></div>
+          <input class="fsearch" type="search" placeholder="Search" aria-label="Search sources" data-for="sources">
+          <div class="opts" id="sources"></div>
+        </section>
+        <section>
+          <div class="f-head"><h4>Time period</h4><button class="clear" id="timeClear">Clear</button></div>
+          <div class="opts" id="time"></div>
+          <span class="label">Or published on or after</span>
+          <input class="datein" type="date" id="from" aria-label="Published on or after">
+        </section>
+        <section>
+          <label class="check"><input type="checkbox" id="cveOnly"> Only stories mentioning CVEs</label>
+        </section>
+      </div>
+    </details>
+  </aside>
+</div>
+<footer class="wrap foot" id="foot"></footer>
+
+<script>
+const DATA = /*__DATA__*/null;
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const safeUrl = (u) => /^https?:\/\//i.test(u || "") ? u : "";
+const isoDate = (d) => d ? d.toISOString().slice(0, 10) : "undated";
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const niceDate = (d) => d ? `${String(d.getUTCDate()).padStart(2, "0")} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}` : "Undated";
+function ago(d, short = false) {
+  if (!d) return "";
+  const m = Math.round((Date.now() - d.getTime()) / 6e4);
+  if (m < 1) return "Just now";
+  if (m < 60) return short ? `${m}m` : `${m} min ago`;
+  const h = Math.round(m / 60);
+  if (h < 24) return short ? `${h}h` : `${h} hr${h === 1 ? "" : "s"} ago`;
+  const days = Math.round(h / 24);
+  if (days < 7) return short ? `${days}d` : `${days} day${days === 1 ? "" : "s"} ago`;
+  return short ? `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}` : niceDate(d);
+}
+
+const PALETTE = ["#4f46e5", "#e11d48", "#7c3aed", "#0d9488", "#2563eb", "#db2777", "#d97706", "#0891b2", "#65a30d", "#9333ea", "#475569", "#059669", "#64748b"];
+const topics = DATA.topics, topicName = Object.fromEntries(topics.map(t => [t.id, t.name]));
+const topicColor = Object.fromEntries(topics.map((t, i) => [t.id, t.color || PALETTE[i % PALETTE.length]]));
+const indName = Object.fromEntries(DATA.industries.map(t => [t.id, t.name]));
+const locName = Object.fromEntries(DATA.locations.map(t => [t.id, t.name]));
+const arts = DATA.articles.map((a, i) => ({ ...a, i, date: a.published ? new Date(a.published) : null }))
+  .sort((x, y) => (y.date || 0) - (x.date || 0));
+const byLink = new Map(arts.map(a => [a.link, a]));
+
+// ---- Browser storage (saved stories, CVE watchlist). Survives future reports; fails soft. -------------
+const store = (() => { try { const s = window.localStorage; s.setItem("_t", "1"); s.removeItem("_t"); return s; } catch (e) { return null; } })();
+const load = (k, d) => { try { return JSON.parse(store?.getItem(k) ?? "null") ?? d; } catch (e) { return d; } };
+const keep = (k, v) => { try { store?.setItem(k, JSON.stringify(v)); } catch (e) {} };
+let saved = load("secnews:saved", {});      // link -> stored copy of the story
+let watch = load("secnews:watch", []);      // ["CVE-2026-1234", "ivanti", ...]
+let watchSeen = load("secnews:watchSeen", 0); // ms timestamp of the last CVE Watch visit
+
+// ---- Filter state ------------------------------------------------------------------------------------
+const state = { industries: new Set(), locations: new Set(), sources: new Set(), days: 0, limit: 0 };
+const PAGE = 10;
+
+const CVE_ID = /^CVE-\d{4}-\d{4,7}$/i;
+const watchRe = (term) => new RegExp(`(?<![\\w-])${term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\w])`, "i");
+function watchHits(a) {
+  return watch.filter(t => CVE_ID.test(t) ? a.cves.includes(t.toUpperCase()) : watchRe(t).test(a.title + " " + a.summary));
+}
+
+function filtered(anyTime = false) {
+  const from = anyTime ? "" : $("from").value;
+  const cutoff = state.days && !anyTime ? Date.now() - state.days * 864e5 : 0;
+  return arts.filter(a =>
+    (!state.industries.size || a.industries.some(t => state.industries.has(t))) &&
+    (!state.locations.size || a.locations.some(t => state.locations.has(t))) &&
+    (!state.sources.size || state.sources.has(a.source)) &&
+    (!from || (a.date && isoDate(a.date) >= from)) &&
+    (!cutoff || (a.date && a.date.getTime() >= cutoff)) &&
+    (!$("cveOnly").checked || a.cves.length));
+}
+const filtersActive = () => state.industries.size || state.locations.size || state.sources.size || state.days || $("from").value || $("cveOnly").checked;
+
+// ---- Story pieces ------------------------------------------------------------------------------------
+const BOOKMARK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M6 3h12v18l-6-4.5L6 21z"/></svg>';
+function saveBtn(a) {
+  const on = !!saved[a.link];
+  return `<button class="save" data-save="${esc(a.link)}" aria-pressed="${on}" aria-label="${on ? "Remove from saved" : "Save story"}">${BOOKMARK}${on ? "Saved" : "Save"}</button>`;
+}
+function kicker(a) {
+  const t = a.topics.find(x => x !== "general");
+  return t ? `<a class="kicker" href="#/section/${t}" style="--c:${topicColor[t]}">${esc(topicName[t])}</a>` : `<span class="kicker">Security</span>`;
+}
+function thumb(a, cls = "") {
+  const img = safeUrl(a.image), href = esc(safeUrl(a.link) || "#");
+  return `<a class="thumb ${cls}" href="${href}" target="_blank" rel="noopener noreferrer" tabindex="-1" aria-hidden="true">${
+    img ? `<img src="${esc(img)}" alt="" loading="lazy" referrerpolicy="no-referrer" data-ph="${esc(a.source)}">` : `<span class="ph">${esc(a.source)}</span>`}</a>`;
+}
+function byline(a, withAgo = true) {
+  const hits = watchHits(a);
+  return `<div class="byline"><span class="src">${esc(a.source)}</span><span class="when" title="${niceDate(a.date)}">${withAgo ? ago(a.date) : niceDate(a.date)}</span>${
+    a.also_reported_by?.length ? `<span class="also" title="Also: ${esc(a.also_reported_by.join(", "))}">${a.also_reported_by.length + 1} outlets</span>` : ""}${
+    hits.length ? `<span class="watch">Watching: ${esc(hits.join(", "))}</span>` : ""}</div>`;
+}
+const titleLink = (a) => `<a href="${esc(safeUrl(a.link) || "#")}" target="_blank" rel="noopener noreferrer">${esc(a.title)}</a>`;
+const cveList = (a) => a.cves?.length ? `<div class="cves">${a.cves.slice(0, 6).map(c => `<span>${esc(c)}</span>`).join("")}</div>` : "";
+
+const lead = (a) => `<article class="lead">${thumb(a)}<div style="margin-top:14px">${kicker(a)}</div>
+  <h1 class="title">${titleLink(a)}</h1>${a.summary ? `<p>${esc(a.summary)}</p>` : ""}${cveList(a)}
+  <div class="meta-row">${byline(a)}${saveBtn(a)}</div></article>`;
+const tile = (a) => `<article class="tile">${thumb(a)}<div style="margin-top:10px">${kicker(a)}</div>
+  <h3 class="title">${titleLink(a)}</h3><div class="bottom">${byline(a)}</div><div style="margin-top:8px">${saveBtn(a)}</div></article>`;
+const row = (a) => `<article class="row">${thumb(a)}<div>${kicker(a)}<h3 class="title">${titleLink(a)}</h3>
+  ${a.summary ? `<p>${esc(a.summary)}</p>` : ""}<div class="bottom">${byline(a)}${saveBtn(a)}</div>${cveList(a)}</div></article>`;
+const headline = (a) => `<li><time datetime="${a.published || ""}">${ago(a.date, true)}</time><div>${titleLink(a)}<span class="s">${esc(a.source)}</span></div></li>`;
+
+function rowsWithMore(list, emptyHtml) {
+  if (!list.length) return emptyHtml;
+  const shown = list.slice(0, state.limit || PAGE);
+  return `<div class="rows">${shown.map(row).join("")}</div>${list.length > shown.length
+    ? `<button class="load-more" id="more">Load more stories <span style="font-weight:500">(${list.length - shown.length} more)</span></button>` : ""}`;
+}
+
+function emptyForTime(matchAll) {
+  const older = matchAll.filter(a => a.date);
+  if (!older.length || (!state.days && !$("from").value)) return '<p class="empty">No stories match these filters.</p>';
+  const newest = older[0].date, ageDays = (Date.now() - newest.getTime()) / 864e5;
+  const fit = PERIODS.find(([d]) => d && d > state.days && d >= ageDays) || [0, "Any time"];
+  return `<p class="empty">Nothing in this time period. The most recent matching story is from ${niceDate(newest)}.<br>
+    <button class="widen" data-days="${fit[0]}">Show ${fit[1].toLowerCase()}</button></p>`;
+}
+
+function activeFiltersBar() {
+  if (!filtersActive()) return "";
+  const chips = [...state.industries].map(i => indName[i]).concat([...state.locations].map(l => locName[l]), [...state.sources]);
+  if (state.days) chips.push(PERIODS.find(([d]) => d === state.days)[1]);
+  if ($("from").value) chips.push(`Since ${niceDate(new Date($("from").value + "T00:00:00Z"))}`);
+  if ($("cveOnly").checked) chips.push("Mentions a CVE");
+  return `<div class="active-filters">Filtered by: ${chips.map(c => `<span class="chip">${esc(c)}</span>`).join("")}<button id="clearAll">Clear all</button></div>`;
+}
+
+// ---- Views -------------------------------------------------------------------------------------------
+function viewLatest(list) {
+  if (!list.length) return activeFiltersBar() + emptyForTime(filtered(true));
+  const [top, ...rest] = list;
+  const latest = rest.slice(0, 6);
+  const used = new Set([top, ...latest].map(a => a.link));
+  let html = activeFiltersBar() + `<div class="front">${lead(top)}<div><h2 class="side-head">Latest</h2><ul class="headlines">${latest.map(headline).join("")}</ul></div></div>`;
+  for (const t of topics) {
+    if (t.id === "general") continue;
+    const items = list.filter(a => !used.has(a.link) && a.topics[0] === t.id).slice(0, 3);
+    if (!items.length) continue;
+    items.forEach(a => used.add(a.link));
+    html += `<section class="section"><div class="sec-head" style="--c:${topicColor[t.id]}"><h2>${esc(t.name)}</h2><a href="#/section/${t.id}">See all ›</a></div>
+      ${items.length === 3 ? `<div class="tiles">${items.map(tile).join("")}</div>` : `<div class="rows">${items.map(row).join("")}</div>`}</section>`;
+  }
+  const more = list.filter(a => !used.has(a.link));
+  if (more.length) html += `<h2 class="side-head more-head">More stories</h2>` + rowsWithMore(more, "");
+  return html;
+}
+
+function viewSection(id, list) {
+  const items = list.filter(a => a.topics.includes(id));
+  const head = `<h1 class="page-head" style="--c:${topicColor[id] || "var(--navy)"}">${esc(topicName[id] || id)}</h1>
+    <p class="page-sub">${items.length} stor${items.length === 1 ? "y" : "ies"}</p>`;
+  return head + activeFiltersBar() + rowsWithMore(items, emptyForTime(filtered(true).filter(a => a.topics.includes(id))));
+}
+
+function viewSearch(q, list) {
+  const needle = q.toLowerCase();
+  const items = list.filter(a => (a.title + " " + a.summary + " " + a.cves.join(" ") + " " + a.source).toLowerCase().includes(needle));
+  return `<h1 class="page-head">Search results</h1><p class="page-sub">${items.length} stor${items.length === 1 ? "y" : "ies"} matching “${esc(q)}”</p>`
+    + activeFiltersBar() + rowsWithMore(items, '<p class="empty">No stories match your search. Try a vendor, product, threat actor or CVE ID.</p>');
+}
+
+function viewSaved() {
+  // Saved stories are kept in the browser, so they still show after next week's report replaces this one.
+  const items = Object.values(saved).map(s => byLink.get(s.link) || { ...s, date: s.published ? new Date(s.published) : null, cves: s.cves || [], also_reported_by: [], topics: s.topics || ["general"] })
+    .sort((x, y) => (y.savedAt || 0) - (x.savedAt || 0));
+  return `<h1 class="page-head">Saved stories</h1><p class="page-sub">${items.length} saved${store ? "" : " (this browser can't store them, so they'll be lost when you close the page)"}</p>`
+    + rowsWithMore(items, '<p class="empty">Nothing saved yet. Use the <b>Save</b> button on any story to keep it here.</p>');
+}
+
+function viewCve(list) {
+  const items = watch.length ? list.filter(a => watchHits(a).length) : [];
+  const head = `<h1 class="page-head" style="--c:var(--live)">CVE Watch</h1>
+    <p class="page-sub">${watch.length ? `Stories mentioning ${watch.map(esc).join(", ")}` : "Add CVE IDs or products in the CVE Watch box to follow them here."}</p>`;
+  return head + activeFiltersBar() + rowsWithMore(items, watch.length ? '<p class="empty">No stories mention your watched CVEs or products yet.</p>' : "");
+}
+
+// ---- Router -------------------------------------------------------------------------------------------
+function route() {
+  const h = location.hash.replace(/^#\/?/, "");
+  if (h.startsWith("section/")) return { name: "section", id: decodeURIComponent(h.slice(8)) };
+  if (h === "saved" || h === "cve") return { name: h };
+  return { name: "latest" };
+}
+
+function render(resetLimit = true) {
+  if (resetLimit) state.limit = PAGE;
+  const r = route(), q = $("q").value.trim(), list = filtered();
+  let html;
+  if (q) html = viewSearch(q, list);
+  else if (r.name === "section") html = viewSection(r.id, list);
+  else if (r.name === "saved") html = viewSaved();
+  else if (r.name === "cve") { html = viewCve(list); markWatchSeen(); }
+  else html = viewLatest(list);
+  $("main").innerHTML = html;
+  renderNav(r, q);
+  renderWatchBox();
+  document.querySelectorAll("[data-clear]").forEach(b => b.hidden = !state[b.dataset.clear].size);
+  $("timeClear").hidden = !state.days && !$("from").value;
+}
+
+function renderNav(r, q) {
+  const counts = {};
+  arts.forEach(a => a.topics.forEach(t => counts[t] = (counts[t] || 0) + 1));
+  const cur = (name, id) => !q && r.name === name && (id === undefined || r.id === id) ? ' aria-current="page"' : "";
+  const newHits = watch.length ? arts.filter(a => a.date && a.date.getTime() > watchSeen && watchHits(a).length).length : 0;
+  $("sections").innerHTML = `<a href="#/latest"${cur("latest")}>Latest</a>`
+    + topics.filter(t => counts[t.id] && t.id !== "general").map(t => `<a href="#/section/${t.id}"${cur("section", t.id)}>${esc(t.name)}</a>`).join("")
+    + `<span class="spacer"></span><a href="#/saved"${cur("saved")}>Saved<span class="count">${Object.keys(saved).length}</span></a>`
+    + `<a href="#/cve"${cur("cve")}>CVE Watch${newHits ? `<span class="pill" title="New since your last visit">${newHits}</span>` : ""}</a>`;
+  // Keep the current section visible in the (horizontally scrolling) bar without moving the page itself.
+  const tab = document.querySelector(".nav [aria-current]"), bar = $("sections");
+  if (tab && (tab.offsetLeft < bar.scrollLeft || tab.offsetLeft + tab.offsetWidth > bar.scrollLeft + bar.clientWidth)) {
+    bar.scrollLeft = tab.offsetLeft - 16;
+  }
+}
+
+// ---- Live strip: newest stories, rotating ------------------------------------------------------------
+const liveItems = arts.filter(a => a.date).slice(0, 5);
+let liveIdx = 0, livePaused = false;
+function showLive() {
+  const a = liveItems[liveIdx];
+  if (!a) { $("live").innerHTML = '<span class="live-time">No stories yet</span>'; return; }
+  $("live").innerHTML = `<span class="live-time">${ago(a.date)}</span>${titleLink(a)}<span class="live-src">${esc(a.source)}</span>`;
+}
+showLive();
+if (liveItems.length > 1 && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
+  $("live").addEventListener("mouseenter", () => livePaused = true);
+  $("live").addEventListener("mouseleave", () => livePaused = false);
+  setInterval(() => {
+    if (livePaused || document.hidden) return;
+    $("live").classList.add("fade");
+    setTimeout(() => { liveIdx = (liveIdx + 1) % liveItems.length; showLive(); $("live").classList.remove("fade"); }, 350);
+  }, 7000);
+}
+
+// ---- Saved stories -----------------------------------------------------------------------------------
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-save]"); if (!b) return;
+  const link = b.dataset.save, a = byLink.get(link) || saved[link];
+  if (saved[link]) delete saved[link];
+  else saved[link] = { link, title: a.title, source: a.source, published: a.published, image: a.image, summary: a.summary,
+                       topics: a.topics, cves: a.cves, savedAt: Date.now() };
+  keep("secnews:saved", saved);
+  route().name === "saved" ? render(false) : (() => {
+    document.querySelectorAll(`[data-save="${CSS.escape(link)}"]`).forEach(x => x.outerHTML = saveBtn({ link }));
+    renderNav(route(), $("q").value.trim());
+  })();
+});
+
+// ---- CVE Watch ---------------------------------------------------------------------------------------
+function renderWatchBox() {
+  $("watchedList").innerHTML = watch.map(t => {
+    const hits = arts.filter(a => watchHits(a).includes(t));
+    const fresh = hits.filter(a => a.date && a.date.getTime() > watchSeen).length;
+    return `<li><span><b>${esc(t)}</b><span class="n${fresh ? " hot" : ""}">${hits.length} stor${hits.length === 1 ? "y" : "ies"}${fresh ? `, ${fresh} new` : ""}</span></span>
+      <button class="x" data-unwatch="${esc(t)}" aria-label="Stop watching ${esc(t)}">×</button></li>`;
+  }).join("");
+  const counts = {};
+  arts.forEach(a => a.cves.forEach(c => counts[c] = (counts[c] || 0) + 1));
+  const top = Object.entries(counts).sort((x, y) => y[1] - x[1] || (x[0] < y[0] ? 1 : -1)).slice(0, 8);
+  const watching = new Set(watch.map(w => w.toUpperCase()));
+  $("trending").innerHTML = top.length ? top.map(([c, n]) => `<li><span><span class="cve">${esc(c)}</span> <span class="n">${n} stor${n === 1 ? "y" : "ies"}</span></span>
+    <button data-watch="${esc(c)}"${watching.has(c) ? " disabled" : ""}>${watching.has(c) ? "Watching" : "+ Watch"}</button></li>`).join("")
+    : '<li class="n">No CVEs mentioned in these stories.</li>';
+}
+function addWatch(term) {
+  term = term.trim();
+  if (!term) return;
+  if (CVE_ID.test(term)) term = term.toUpperCase();
+  if (!watch.some(w => w.toLowerCase() === term.toLowerCase())) { watch.push(term); keep("secnews:watch", watch); }
+  render(false);
+}
+function markWatchSeen() { watchSeen = Date.now(); keep("secnews:watchSeen", watchSeen); }
+$("watchForm").addEventListener("submit", (e) => { e.preventDefault(); addWatch($("watchInput").value); $("watchInput").value = ""; });
+document.addEventListener("click", (e) => {
+  const w = e.target.closest("[data-watch]"); if (w) addWatch(w.dataset.watch);
+  const u = e.target.closest("[data-unwatch]");
+  if (u) { watch = watch.filter(x => x !== u.dataset.unwatch); keep("secnews:watch", watch); render(false); }
+});
+
+// ---- Daily briefing sign-up ----------------------------------------------------------------------------
+$("briefForm").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const email = $("briefEmail").value.trim(), note = $("briefNote"), site = DATA.site || {};
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { note.textContent = "Please enter a valid email address."; return; }
+  if (safeUrl(site.subscribe_url)) {
+    const f = Object.assign(document.createElement("form"), { method: "POST", action: site.subscribe_url, target: "_blank" });
+    f.append(Object.assign(document.createElement("input"), { type: "hidden", name: "email", value: email }));
+    document.body.append(f); f.submit(); f.remove();
+    note.textContent = "Thanks! Check your inbox to confirm your subscription.";
+  } else if (site.subscribe_email) {
+    const title = site.briefing_title || "Daily briefing";
+    location.href = `mailto:${encodeURIComponent(site.subscribe_email)}?subject=${encodeURIComponent("Subscribe: " + title)}&body=${encodeURIComponent("Please add " + email + " to the " + title + ".")}`;
+    note.textContent = "Your email app should open with a sign-up request. Just press send.";
+  } else {
+    note.textContent = "Sign-up isn't connected yet. Set subscribe_url or subscribe_email in site.json.";
+  }
+});
+
+// ---- Refine panel ------------------------------------------------------------------------------------
+const sourceItems = [...new Set(arts.map(a => a.source))].sort().map(s => ({ id: s, name: s }));
+const LISTS = {
+  industries: { items: DATA.industries, field: a => a.industries },
+  locations: { items: DATA.locations, field: a => a.locations },
+  sources: { items: sourceItems, field: a => [a.source] },
+};
+for (const [key, { items, field }] of Object.entries(LISTS)) {
+  const counts = {};
+  arts.forEach(a => field(a).forEach(id => counts[id] = (counts[id] || 0) + 1));
+  $(key).innerHTML = items.map(t => {
+    const n = counts[t.id] || 0;
+    return `<button class="opt" aria-pressed="false" data-id="${esc(t.id)}" data-name="${esc(t.name.toLowerCase())}" title="${n} stor${n === 1 ? "y" : "ies"}"${n ? "" : " disabled"}>${esc(t.name)}</button>`;
+  }).join("");
+  $(key).addEventListener("click", (e) => {
+    const b = e.target.closest(".opt"); if (!b) return;
+    const s = state[key], id = b.dataset.id;
+    s.has(id) ? s.delete(id) : s.add(id);
+    b.setAttribute("aria-pressed", s.has(id));
+    render();
+  });
+}
+document.querySelectorAll(".fsearch[data-for]").forEach(inp => inp.addEventListener("input", () => {
+  const q = inp.value.trim().toLowerCase();
+  $(inp.dataset.for).querySelectorAll(".opt").forEach(o => o.hidden = q && !o.dataset.name.includes(q));
+}));
+document.querySelectorAll("[data-clear]").forEach(b => b.addEventListener("click", () => {
+  state[b.dataset.clear].clear();
+  $(b.dataset.clear).querySelectorAll(".opt").forEach(o => o.setAttribute("aria-pressed", "false"));
+  render();
+}));
+
+const PERIODS = [[1, "Last 24 hours"], [3, "Last 3 days"], [7, "Last 7 days"], [14, "Last 14 days"],
+  [30, "Last 30 days"], [60, "Last 60 days"], [90, "Last 90 days"], [0, "Any time"]];
+$("time").innerHTML = PERIODS.map(([d, l]) => `<button class="opt" data-days="${d}" aria-pressed="${d === state.days}">${l}</button>`).join("");
+function setDays(d) {
+  state.days = d;
+  $("time").querySelectorAll(".opt").forEach(o => o.setAttribute("aria-pressed", String(+o.dataset.days === d && !$("from").value)));
+}
+$("time").addEventListener("click", (e) => { const b = e.target.closest(".opt"); if (!b) return; $("from").value = ""; setDays(+b.dataset.days); render(); });
+$("from").addEventListener("input", () => { setDays(0); render(); });
+$("timeClear").addEventListener("click", () => { $("from").value = ""; setDays(0); render(); });
+$("cveOnly").addEventListener("input", () => render());
+
+function clearAll() {
+  for (const k of ["industries", "locations", "sources"]) { state[k].clear(); $(k).querySelectorAll(".opt").forEach(o => o.setAttribute("aria-pressed", "false")); }
+  $("from").value = ""; $("cveOnly").checked = false; setDays(0); render();
+}
+
+// ---- Global events -----------------------------------------------------------------------------------
+$("main").addEventListener("click", (e) => {
+  if (e.target.closest("#more")) { state.limit += PAGE; render(false); return; }
+  const w = e.target.closest(".widen"); if (w) { $("from").value = ""; setDays(+w.dataset.days); render(); return; }
+  if (e.target.closest("#clearAll")) clearAll();
+});
+$("main").addEventListener("error", (e) => {
+  if (e.target.tagName !== "IMG") return;
+  const span = document.createElement("span"); span.className = "ph"; span.textContent = e.target.dataset.ph || "";
+  e.target.replaceWith(span);
+}, true);
+let searchTimer;
+$("q").addEventListener("input", () => { clearTimeout(searchTimer); searchTimer = setTimeout(() => { render(); window.scrollTo({ top: 0 }); }, 150); });
+$("q").addEventListener("keydown", (e) => { if (e.key === "Escape") { $("q").value = ""; render(); } });
+window.addEventListener("hashchange", () => { $("q").value = ""; render(); window.scrollTo({ top: 0 }); });
+if (matchMedia("(min-width: 961px)").matches) $("refine").open = true;
+
+// When the site is hosted (e.g. GitHub Pages) and rebuilt on a schedule, tell readers with the page open.
+if (/^https?:$/.test(location.protocol)) {
+  setInterval(async () => {
+    try {
+      const html = await (await fetch(location.pathname, { cache: "no-store" })).text();
+      const m = html.match(/"generated":\s*"([^"]+)"/);
+      if (m && m[1] !== DATA.generated && !$("fresh")) {
+        document.querySelector(".live .wrap").insertAdjacentHTML("beforeend",
+          '<button id="fresh" class="widen" style="margin:0 0 0 auto;flex:none" onclick="location.reload()">New stories available · Refresh</button>');
+      }
+    } catch (e) { /* offline: try again next time */ }
+  }, 10 * 60 * 1000);
+}
+
+const nSources = new Set(arts.map(a => a.source)).size;
+$("foot").textContent = `${arts.length} stories from ${nSources} sources`;
+render();
+</script>
+</body>
+</html>

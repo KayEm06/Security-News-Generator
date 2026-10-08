@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:media="http://search.yahoo.com/mrss/">
+<channel>
+  <title>Example UK News</title>
+  <item>
+    <title>UK charity hit by ransomware as donor data is stolen</title>
+    <link>https://uk.example.com/charity-ransomware</link>
+    <pubDate>Mon, 05 Oct 2026 09:00:00 +0100</pubDate>
+    <media:thumbnail url="https://img.example.com/charity.jpg?w=320&amp;h=180"/>
+    <description>The British non-profit told the Charity Commission and the ICO that donations records were taken.</description>
+  </item>
+  <item>
+    <title>German manufacturer recovers from cyberattack</title>
+    <link>https://uk.example.com/german-manufacturer</link>
+    <pubDate>Sun, 04 Oct 2026 09:00:00 +0000</pubDate>
+    <description><![CDATA[<img src="https://feeds.example.com/pixel.gif" width="1" height="1"><p><img class="hero" src="https://img.example.com/factory.png" alt="">Production lines in Germany were halted for three days.</p>]]></description>
+  </item>
+</channel>
+</rss>

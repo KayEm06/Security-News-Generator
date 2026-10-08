@@ -1,0 +1,10 @@
+{
+  "_comment": "Settings for the HTML page and the daily briefing email. Edit freely.",
+
+  "_subscribe": "Daily briefing sign-up box. Set ONE of these. subscribe_url: a newsletter provider's form/endpoint (Buttondown, Mailchimp, Formspree, a Microsoft/Google Form...) that accepts a POSTed 'email' field. subscribe_email: your own address; the box opens a pre-filled email to you, and you add the person with 'secnews subscribers add'. Leave both empty to hide the sign-up box.",
+  "subscribe_url": "",
+  "subscribe_email": "",
+
+  "briefing_title": "sanitised. Daily Briefing",
+  "briefing_max_stories": 15
+}
