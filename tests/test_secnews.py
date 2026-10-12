@@ -618,6 +618,17 @@ class CliTests(unittest.TestCase):
         log = load_sent(path)
         self.assertEqual((log["last_sent_day"], list(log["links"])), ("2026-10-12", ["https://b"]))
 
+    def test_forget_sent_day(self):
+        from secnews.briefing import load_sent, record_sent
+        path = self.tmp / "sent.json"
+        record_sent(path, ["https://a"], "2026-10-11")
+        record_sent(path, ["https://b", "https://c"], "2026-10-12")
+        code, _, err = self.run_cli("briefing", "--sent-log", str(path), "--forget-sent", "2026-10-12")
+        self.assertEqual(code, 0, err)
+        self.assertIn("Forgot 2 stories", err)
+        log = load_sent(path)
+        self.assertEqual((log["last_sent_day"], list(log["links"])), ("2026-10-11", ["https://a"]))
+
     def test_briefing_scheduled_for_9am_and_once_per_day(self):
         from unittest import mock
         from zoneinfo import ZoneInfo

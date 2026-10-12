@@ -17,6 +17,11 @@ on:
     - cron: "17 7 * * *"
     - cron: "17 8 * * *"
   workflow_dispatch:
+    inputs:
+      forget_sent_day:
+        description: "Instead of sending, undo the briefing sent on this day (YYYY-MM-DD, e.g. a test) so its stories can go out again"
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -53,7 +58,12 @@ jobs:
           SECNEWS_SMTP_FROM: ${{ secrets.SECNEWS_SMTP_FROM }}
           SECNEWS_SMTP_SECURITY: ${{ secrets.SECNEWS_SMTP_SECURITY }}
           SUBSCRIBERS: ${{ secrets.SECNEWS_SUBSCRIBERS }}
+          FORGET_SENT_DAY: ${{ inputs.forget_sent_day }}
         run: |
+          if [ -n "$FORGET_SENT_DAY" ]; then
+            python -m secnews briefing --archive .secnews/archive.json --forget-sent "$FORGET_SENT_DAY"
+            exit 0
+          fi
           printf '%s\n' "$SUBSCRIBERS" | tr ',;' '\n\n' > subscribers.txt
           python -m secnews briefing --archive .secnews/archive.json --subscribers subscribers.txt \
             --send --at 09:00 --once-per-day -o briefing.html
