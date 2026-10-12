@@ -117,17 +117,8 @@ PROVIDERS = {
               "tip": "Use an App Password (Google Account > Security > App passwords), not your normal password."},
     "outlook": {"label": "Outlook.com / Hotmail", "host": "smtp-mail.outlook.com", "port": 587, "security": "starttls",
                 "tip": "Microsoft is phasing out password sign-in for personal accounts; if it's refused, use another provider."},
-    "proton-bridge": {"label": "Proton Mail via Proton Mail Bridge (paid Proton plans; this computer must be on)",
-                      "host": "127.0.0.1", "port": 1025, "security": "starttls", "local_bridge": True,
-                      "tip": "Open Proton Mail Bridge, click your account and copy the SMTP username and the Bridge "
-                             "password it shows (not your Proton login password)."},
-    "proton-smtp": {"label": "Proton Mail SMTP token (Proton for Business with a custom domain)",
-                    "host": "smtp.protonmail.ch", "port": 587, "security": "starttls",
-                    "tip": "Create a token in Proton Mail: Settings > IMAP/SMTP > SMTP tokens. Use your custom-domain "
-                           "address as the username and the token as the password."},
     "other": {"label": "Other (enter the server details yourself)", "host": "", "port": 587, "security": "starttls", "tip": ""},
 }
-LOCAL_HOSTS = ("127.0.0.1", "localhost", "::1")
 
 
 def email_config_path() -> Path:
@@ -160,21 +151,13 @@ def save_email_config(cfg: dict, path: Path | None = None) -> Path:
 def smtp_settings() -> dict:
     """Email settings from ~/.secnews/email.json, overridden by SECNEWS_SMTP_* environment variables."""
     cfg, env = load_email_config(), os.environ
-    def get(key: str, env_name: str, default="") -> str:
-        if env.get(env_name):
-            return env[env_name]
-        value = cfg.get(key)
-        return str(default) if value is None or value == "" else str(value)  # keeps a saved False/0
+    get = lambda key, env_name, default="": env.get(env_name) or str(cfg.get(key) or default)  # noqa: E731
     s = {
         "host": get("host", "SECNEWS_SMTP_HOST"),
         "port": int(get("port", "SECNEWS_SMTP_PORT", 587)),
         "user": get("user", "SECNEWS_SMTP_USER"),
         "password": get("password", "SECNEWS_SMTP_PASSWORD"),
         "security": get("security", "SECNEWS_SMTP_SECURITY", "starttls").lower(),  # starttls | ssl | none
-        # A local mail app such as Proton Mail Bridge uses its own self-signed certificate: either point
-        # cafile at its exported certificate, or turn verify_tls off (only honoured for 127.0.0.1/localhost).
-        "cafile": get("cafile", "SECNEWS_SMTP_CAFILE"),
-        "verify_tls": get("verify_tls", "SECNEWS_SMTP_VERIFY_TLS", "true").lower() not in ("false", "0", "no"),
     }
     s["sender"] = get("sender", "SECNEWS_SMTP_FROM") or s["user"]
     missing = [k for k in ("host", "sender") if not s[k]]
@@ -182,24 +165,12 @@ def smtp_settings() -> dict:
         raise SmtpConfigError("no email server set up. Run 'secnews email setup' (or set SECNEWS_SMTP_HOST and SECNEWS_SMTP_FROM)")
     if s["user"] and not s["password"]:
         raise SmtpConfigError("no password. Run 'secnews email setup' again or set SECNEWS_SMTP_PASSWORD")
-    if not s["verify_tls"] and s["host"].lower() not in LOCAL_HOSTS:
-        raise SmtpConfigError("certificate checks can only be turned off for a mail app on this computer "
-                              "(127.0.0.1). Use cafile for remote servers")
     return s
-
-
-def _tls_context(settings: dict) -> ssl.SSLContext:
-    ctx = ssl.create_default_context(cafile=settings.get("cafile") or None)
-    if settings.get("verify_tls") is False and settings["host"].lower() in LOCAL_HOSTS:
-        # Traffic never leaves this computer (e.g. Proton Mail Bridge), so its self-signed certificate is acceptable.
-        ctx.check_hostname = False
-        ctx.verify_mode = ssl.CERT_NONE
-    return ctx
 
 
 def send(recipients: list[str], subject: str, html_body: str, text_body: str, settings: dict) -> list[str]:
     """Send one message per recipient (so nobody sees the list). Returns addresses that failed."""
-    ctx = _tls_context(settings)
+    ctx = ssl.create_default_context()
     if settings["security"] == "ssl":
         server = smtplib.SMTP_SSL(settings["host"], settings["port"], context=ctx, timeout=30)
     else:

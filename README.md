@@ -72,9 +72,6 @@ Provider notes:
 - **Gmail / Google Workspace:** you need an *App Password* (Google Account › Security › 2-Step Verification › App passwords). Your normal password won't work.
 - **Microsoft 365 (work account):** your IT team may need to enable *Authenticated SMTP* for the mailbox. If the test says `SmtpClientAuthentication is disabled`, that's the fix.
 - **Outlook.com / Hotmail:** Microsoft is phasing out password sign-in for personal accounts, so this may be refused. Use another account if so.
-- **Proton Mail:** free Proton accounts can't send from other apps. There are two ways on paid plans:
-  - **Proton Mail Bridge** (Mail Plus, Unlimited and other paid plans). Install Bridge, sign in, then choose *Proton Mail via Proton Mail Bridge* in `secnews email setup`. Use the SMTP username and *Bridge password* shown in Bridge, not your Proton login password. Bridge uses its own certificate: either export it (*Bridge › Settings › Advanced settings › Export TLS certificates*) and give the `cert.pem` path, or let setup skip the check. Skipping is only allowed for a mail app on your own computer. Your computer must be on with Bridge running when the briefing sends, so use Option B in *Automatic updates*. GitHub Actions can't reach Bridge.
-  - **SMTP token** (Proton for Business with a custom-domain address). Create a token in *Proton Mail › Settings › IMAP/SMTP › SMTP tokens* and choose *Proton Mail SMTP token* in setup. This connects straight to `smtp.protonmail.ch`, so it also works from GitHub Actions: set the secret `SECNEWS_SMTP_HOST` to `smtp.protonmail.ch`, `SECNEWS_SMTP_USER` to your custom-domain address, and `SECNEWS_SMTP_PASSWORD` to the token.
 - For a team, a dedicated mailbox such as `security-news@yourorg.com` is best.
 
 Environment variables override the saved settings, which is how scheduled jobs and GitHub Actions use it:
