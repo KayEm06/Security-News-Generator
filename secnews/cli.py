@@ -100,7 +100,11 @@ def build_parser() -> argparse.ArgumentParser:
     b.add_argument("--hours", type=int, default=24, help="stories from the last N hours (default: 24)")
     b.add_argument("--max", type=int, help="maximum stories (default: briefing_max_stories in site.json)")
     b.add_argument("-o", "--output", help="also save the email as an HTML file")
-    b.add_argument("--send", action="store_true", help="email it to the subscriber list (or --to)")
+    b.add_argument("--send", action="store_true",
+                   help="send it: through Buttondown if set up (to all its subscribers), otherwise by email to the subscriber list")
+    b.add_argument("--draft", action="store_true", help="with Buttondown: create it as a draft to review and send yourself")
+    b.add_argument("--paste", action="store_true",
+                   help="write the briefing ready to paste into a new Buttondown email (works on any Buttondown plan)")
     b.add_argument("--to", action="append", metavar="EMAIL", help="send to these addresses instead of the subscriber list")
     b.add_argument("--subscribers", metavar="FILE", help="subscriber list (default: ~/.secnews/subscribers.txt)")
 
@@ -274,14 +278,41 @@ def cmd_briefing(args) -> int:
     _enrich_and_archive(args, stories, everything, archive_path)
 
     html_body = bf.build_html(stories, taxonomy, title, now)
+    subject = f"{title}: {now.strftime('%d %b %Y')}"
+    if args.paste:
+        out = Path(args.output or "briefing-for-buttondown.html")
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(bf.build_html(stories, taxonomy, title, now, fragment=True), encoding="utf-8")
+        print(f"Saved {len(stories)} stories to {out}.\n"
+              f"In Buttondown: New email > subject \"{subject}\" > switch the editor to HTML/Markdown mode >\n"
+              f"paste the contents of {out} > Send.")
+        return 0
     if args.output:
         Path(args.output).parent.mkdir(parents=True, exist_ok=True)
         Path(args.output).write_text(html_body, encoding="utf-8")
         _log(args, f"Wrote briefing with {len(stories)} stories to {args.output}")
-    if not args.send:
+    if not (args.send or args.draft):
         if not args.output:
             sys.stdout.write(bf.build_text(stories, title, now) + "\n")
         return 0
+
+    bd = bf.buttondown_settings()
+    if bd and not args.to:
+        if not stories:
+            _log(args, "No stories in this period, so nothing was sent.")
+            return 0
+        try:
+            result = bf.buttondown_send(bd["api_key"], subject, bf.build_html(stories, taxonomy, title, now, fragment=True),
+                                        draft=args.draft)
+        except bf.ButtondownError as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 1
+        where = result.get("absolute_url") or "your Buttondown dashboard"
+        _log(args, f"{'Created a draft' if args.draft else 'Sent the briefing to your Buttondown subscribers'}: {where}")
+        return 0
+    if args.draft:
+        print("error: --draft needs Buttondown. Run 'secnews email setup' and choose Buttondown.", file=sys.stderr)
+        return 2
 
     recipients = [e.strip().lower() for e in args.to] if args.to else bf.load_subscribers(
         Path(args.subscribers) if args.subscribers else bf.subscribers_path())
@@ -293,7 +324,6 @@ def cmd_briefing(args) -> int:
     except bf.SmtpConfigError as e:
         print(f"error: email isn't set up: {e}.", file=sys.stderr)
         return 2
-    subject = f"{title}: {now.strftime('%d %b %Y')}"
     failed = bf.send(recipients, subject, html_body, bf.build_text(stories, title, now), settings)
     _log(args, f"Sent briefing to {len(recipients) - len(failed)} of {len(recipients)} subscribers")
     for addr in failed:
@@ -330,6 +360,40 @@ def _send_test(bf, to: str) -> int:
     return 0
 
 
+def _buttondown_test(bf, api_key: str) -> int:
+    try:
+        count = bf.buttondown_check(api_key)
+    except bf.ButtondownError as e:
+        print(f"✗ {e}", file=sys.stderr)
+        return 1
+    print(f"✓ Connected to Buttondown. You have {count} subscriber{'' if count == 1 else 's'}.")
+    print("  Send a briefing with 'secnews briefing --send', or '--draft' to review it in Buttondown first.")
+    return 0
+
+
+def _setup_buttondown(args, bf, getpass) -> int:
+    print("\nBefore continuing:\n"
+          "  1. Create a free account at https://buttondown.com. Sign up with any address you already have;\n"
+          "     it's only your login. The briefings are sent by Buttondown.\n"
+          "  2. In Buttondown, go to Settings > API and copy your API key.\n")
+    old = bf.load_email_config()
+    key = getpass.getpass("Buttondown API key (typing is hidden): ").strip() or old.get("buttondown_api_key", "")
+    if not key:
+        print("error: an API key is needed", file=sys.stderr)
+        return 2
+    username = _ask("Your Buttondown username (as in buttondown.com/<username>)", old.get("buttondown_username", ""))
+    cfg = {**old, "method": "buttondown", "buttondown_api_key": key, "buttondown_username": username}
+    print(f"\nSaved settings to {bf.save_email_config(cfg)}")
+
+    if username and _ask("Connect the site's Daily briefing sign-up box to your Buttondown list? (y/n)", "y").lower().startswith("y"):
+        site_path = Path(args.site_file) if args.site_file else Path(__file__).parent / "data" / "site.json"
+        site = json.loads(site_path.read_text(encoding="utf-8"))
+        site["subscribe_url"], site["subscribe_email"] = bf.buttondown_subscribe_url(username), ""
+        site_path.write_text(json.dumps(site, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        print(f"Sign-ups from the site now go to Buttondown ({site_path}). Rebuild the site to apply it.")
+    return _buttondown_test(bf, key)
+
+
 def cmd_email(args) -> int:
     from . import briefing as bf
     import getpass
@@ -340,12 +404,21 @@ def cmd_email(args) -> int:
         if not cfg:
             print(f"Not set up yet ({path} doesn't exist). Run: secnews email setup")
             return 0
+        if cfg.get("method") == "buttondown":
+            print("method    Buttondown (newsletter service)")
+            print(f"username  {cfg.get('buttondown_username', '')}")
+            print("api key   (saved)")
+            print(f"file      {path}")
+            return 0
         for k in ("host", "port", "security", "user", "sender"):
             print(f"{k:<9} {cfg.get(k, '')}")
         print(f"password  {'(saved)' if cfg.get('password') else '(not saved: uses SECNEWS_SMTP_PASSWORD)'}")
         print(f"file      {path}")
         return 0
     if args.action == "test":
+        bd = bf.buttondown_settings()
+        if bd and not args.to:
+            return _buttondown_test(bf, bd["api_key"])
         try:
             sender = bf.smtp_settings()["sender"]
         except bf.SmtpConfigError as e:
@@ -353,7 +426,13 @@ def cmd_email(args) -> int:
             return 2
         return _send_test(bf, args.to or sender)
 
-    print("Set up email for the daily briefing. Press Enter to accept the [default].\n")
+    print("Set up sending for the daily briefing. Press Enter to accept the [default].\n")
+    print("  1. Buttondown newsletter service: it sends the emails and handles sign-ups and unsubscribes.")
+    print("     No mailbox of your own is used. Free for up to 100 subscribers.")
+    print("  2. An email account (Microsoft 365, Gmail, Outlook.com or your own mail server)")
+    if _ask("\nHow should the briefing be sent? (number)", "1") == "1":
+        return _setup_buttondown(args, bf, getpass)
+    print()
     keys = list(bf.PROVIDERS)
     for n, k in enumerate(keys, 1):
         print(f"  {n}. {bf.PROVIDERS[k]['label']}")
@@ -394,6 +473,10 @@ def cmd_subscribers(args) -> int:
     from . import briefing as bf
 
     path = Path(args.subscribers) if args.subscribers else bf.subscribers_path()
+    if bf.buttondown_settings() and not args.subscribers:
+        print("Note: the briefing is sent through Buttondown, so subscribers are managed there "
+              "(buttondown.com > Subscribers) or through the site's sign-up box. This list is only used "
+              "for sending from an email account.", file=sys.stderr)
     current = bf.load_subscribers(path)
     if args.action == "list":
         for e in current:

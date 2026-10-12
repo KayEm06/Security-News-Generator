@@ -52,21 +52,38 @@ Clearing your browser data, or using a private window, removes them. If you use 
 
 ## Daily briefing email
 
-`secnews briefing` builds an email of the day's top stories (most widely reported first) from the last 24 hours.
+`secnews briefing` builds an email of the day's top stories (most widely reported first) from the last 24 hours. Preview it with `python3 -m secnews briefing -o briefing.html`.
+
+There are two ways to send it. Run `python3 -m secnews email setup` and pick one.
+
+### Option 1: Buttondown (recommended; no mailbox of your own needed)
+
+[Buttondown](https://buttondown.com) is a newsletter service. It sends the briefing from its own servers, manages the subscriber list, and handles confirmations and unsubscribe links. It's free for up to 100 subscribers.
+
+1. Create a Buttondown account. Any address you already have works as the login; the briefings are sent by Buttondown, not from that mailbox.
+2. Copy your API key from *Buttondown › Settings › API*.
+3. Run `python3 -m secnews email setup`, choose **1**, and paste the key and your Buttondown username. Say **y** when asked to connect the site's sign-up box, so people who subscribe on the site join your Buttondown list. Then rebuild the site.
+4. Send it:
+   ```bash
+   python3 -m secnews briefing --draft   # creates it in Buttondown so you can check it and press Send
+   python3 -m secnews briefing --send    # sends it straight to all your Buttondown subscribers
+   ```
+
+**If Buttondown says your plan can't use the API**, you can still use Buttondown for free by pasting the briefing in by hand:
+```bash
+python3 -m secnews briefing --paste
+```
+This saves the briefing to `briefing-for-buttondown.html` and tells you the subject line. In Buttondown, create a new email, switch the editor to HTML/Markdown mode, paste the file's contents, and send.
+
+### Option 2: an email account
 
 ```bash
-python3 -m secnews briefing -o briefing.html      # preview in a browser
-python3 -m secnews subscribers add jo@example.com  # manage the list (~/.secnews/subscribers.txt)
-python3 -m secnews briefing --send                 # email everyone on the list
+python3 -m secnews email setup                     # choose 2
+python3 -m secnews subscribers add jo@example.com  # this option keeps its own list (~/.secnews/subscribers.txt)
+python3 -m secnews briefing --send
 ```
 
-### Setting up email (once)
-
-```bash
-python3 -m secnews email setup
-```
-
-This asks which provider you use (Microsoft 365, Gmail, Outlook.com or other), your email address and password, then sends you a test email. The settings are saved in `~/.secnews/email.json`, which only your user account can read. You can choose not to save the password and set `SECNEWS_SMTP_PASSWORD` instead. `secnews email test` re-sends the test, and `secnews email show` shows the settings with the password hidden.
+Setup asks which provider you use (Microsoft 365, Gmail, Outlook.com or other), your email address and password, then sends you a test email. The settings are saved in `~/.secnews/email.json`, which only your user account can read. You can choose not to save the password and set `SECNEWS_SMTP_PASSWORD` instead. `secnews email test` re-sends the test, and `secnews email show` shows the settings with the password hidden.
 
 Provider notes:
 - **Gmail / Google Workspace:** you need an *App Password* (Google Account › Security › 2-Step Verification › App passwords). Your normal password won't work.
@@ -88,7 +105,7 @@ Each subscriber gets their own copy, so nobody sees the list.
 
 **The sign-up box on the site.** A page opened from your computer can't store a mailing list itself, so set one of these in `secnews/data/site.json`:
 - `subscribe_email`: your own address. The box opens a pre-filled email to you, and you add the person with `secnews subscribers add`.
-- `subscribe_url`: a newsletter service's sign-up endpoint that accepts a posted `email` field, such as Buttondown, Mailchimp, Formspree or a Microsoft/Google Form. Use this if you'd rather a service manage the list and send the emails.
+- `subscribe_url`: a newsletter service's sign-up endpoint that accepts a posted `email` field. `secnews email setup` fills this in for you when you choose Buttondown (`https://buttondown.com/api/emails/embed-subscribe/<username>`). Buttondown then emails each new subscriber a confirmation link.
 
 ## Automatic updates
 
@@ -105,7 +122,9 @@ The repository includes two workflows. Scheduled runs only start once they're on
 
 Set-up, in the repository on GitHub:
 
-1. **Email:** *Settings › Secrets and variables › Actions › New repository secret*. Add `SECNEWS_SMTP_HOST`, `SECNEWS_SMTP_USER` and `SECNEWS_SMTP_PASSWORD`, plus `SECNEWS_SMTP_FROM` if different. Add `SECNEWS_SUBSCRIBERS` with one email address per line. It's a secret, so the list isn't visible in the repository.
+1. **Sending:** go to *Settings › Secrets and variables › Actions › New repository secret*.
+   - **With Buttondown:** add `SECNEWS_BUTTONDOWN_API_KEY`. That's all; Buttondown already has the subscriber list.
+   - **With an email account:** add `SECNEWS_SMTP_HOST`, `SECNEWS_SMTP_USER` and `SECNEWS_SMTP_PASSWORD` (plus `SECNEWS_SMTP_FROM` if different), and `SECNEWS_SUBSCRIBERS` with one email address per line. It's a secret, so the list isn't visible in the repository.
 2. **Publish the site as a web page (optional):** GitHub Pages can publish the site at an address like `https://<you>.github.io/Security-News-Generator/`. It needs either a **public** repository or a paid plan (GitHub Pro) for a private one. The published page can be opened by anyone with the link. To turn it on:
    - *Settings › Pages › Source: GitHub Actions*
    - *Settings › Secrets and variables › Actions › Variables › New variable*: `PUBLISH_SITE` = `true`

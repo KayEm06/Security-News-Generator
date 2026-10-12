@@ -54,7 +54,9 @@ def pick_stories(articles: list[Article], limit: int) -> list[Article]:
     return ranked[:limit]
 
 
-def build_html(articles: list[Article], taxonomy: Taxonomy, title: str, date: datetime) -> str:
+def build_html(articles: list[Article], taxonomy: Taxonomy, title: str, date: datetime, fragment: bool = False) -> str:
+    """The briefing as a complete email, or (fragment=True) just the stories for a newsletter service,
+    which adds its own header, footer and unsubscribe link."""
     e = html.escape
     color = {t.id: t.color or NAVY for t in taxonomy.topics}
     rows = []
@@ -75,6 +77,10 @@ def build_html(articles: list[Article], taxonomy: Taxonomy, title: str, date: da
   </td></tr></table>
 </td></tr>""")
     body = "".join(rows) or '<tr><td style="padding:24px 0;color:#666">No new stories in this period.</td></tr>'
+    if fragment:
+        return (f'<p style="font-size:14px;font-weight:700;font-style:italic;color:{MAROON_TEXT}">Today\'s top {len(articles)} '
+                f'security stories &middot; {date.strftime("%A %d %B %Y")}</p>\n'
+                f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0">{body}</table>')
     return f"""<!doctype html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{e(title)}</title></head>
 <body style="margin:0;padding:0;background:#f4f4f4;font-family:Inter,Segoe UI,Helvetica,Arial,sans-serif">
@@ -102,7 +108,71 @@ def build_text(articles: list[Article], title: str, date: datetime) -> str:
     return "\n".join(lines)
 
 
-# --------------------------------------------------------------------------- sending
+# --------------------------------------------------------------------------- Buttondown (newsletter service)
+
+BUTTONDOWN_API = "https://api.buttondown.com/v1"
+
+
+class ButtondownError(RuntimeError):
+    pass
+
+
+def buttondown_settings() -> dict | None:
+    """{'api_key', 'username'} when the briefing should go out through Buttondown, else None."""
+    cfg = load_email_config()
+    key = os.environ.get("SECNEWS_BUTTONDOWN_API_KEY") or (cfg.get("buttondown_api_key") if cfg.get("method") == "buttondown" else "")
+    if not key:
+        return None
+    return {"api_key": key, "username": os.environ.get("SECNEWS_BUTTONDOWN_USERNAME") or cfg.get("buttondown_username", "")}
+
+
+def buttondown_subscribe_url(username: str) -> str:
+    return f"https://buttondown.com/api/emails/embed-subscribe/{username}"
+
+
+def _buttondown(method: str, path: str, api_key: str, payload: dict | None = None, headers: dict | None = None) -> dict:
+    import json
+    import urllib.error
+    import urllib.request
+    req = urllib.request.Request(
+        f"{BUTTONDOWN_API}{path}", method=method,
+        data=json.dumps(payload).encode() if payload is not None else None,
+        headers={"Authorization": f"Token {api_key}", "Content-Type": "application/json",
+                 "User-Agent": "secnews", **(headers or {})},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:  # noqa: S310 - fixed https API host
+            raw = resp.read()
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", "replace")[:400]
+        if exc.code == 401:
+            raise ButtondownError("Buttondown rejected the API key. Copy it again from Buttondown > Settings > API.") from None
+        if exc.code in (402, 403):
+            raise ButtondownError(
+                "Buttondown won't let this account use the API (it may need a paid plan). You can still send the "
+                "briefing for free: run 'secnews briefing --paste' and paste the result into a new Buttondown email. "
+                f"Details: {detail}") from None
+        raise ButtondownError(f"Buttondown returned HTTP {exc.code}: {detail}") from None
+    except urllib.error.URLError as exc:
+        raise ButtondownError(f"couldn't reach Buttondown: {exc.reason}") from None
+    return json.loads(raw or b"{}")
+
+
+def buttondown_check(api_key: str) -> int:
+    """Validate the key; returns the current subscriber count."""
+    data = _buttondown("GET", "/subscribers?page_size=1", api_key)
+    return int(data.get("count", len(data.get("results", []))))
+
+
+def buttondown_send(api_key: str, subject: str, body_html: str, draft: bool = False) -> dict:
+    """Create the briefing in Buttondown and send it to every subscriber (or leave it as a draft)."""
+    payload = {"subject": subject, "body": body_html, "status": "draft" if draft else "about_to_send"}
+    # Buttondown requires this explicit confirmation before an API call may email subscribers.
+    headers = {} if draft else {"X-Buttondown-Live-Dangerously": "true"}
+    return _buttondown("POST", "/emails", api_key, payload, headers)
+
+
+# --------------------------------------------------------------------------- sending over SMTP
 
 
 class SmtpConfigError(RuntimeError):
