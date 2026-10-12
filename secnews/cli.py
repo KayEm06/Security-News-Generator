@@ -342,6 +342,10 @@ def cmd_email(args) -> int:
             return 0
         for k in ("host", "port", "security", "user", "sender"):
             print(f"{k:<9} {cfg.get(k, '')}")
+        if cfg.get("cafile"):
+            print(f"cafile    {cfg['cafile']}")
+        if cfg.get("verify_tls") is False:
+            print("tls       certificate check skipped (local mail app)")
         print(f"password  {'(saved)' if cfg.get('password') else '(not saved: uses SECNEWS_SMTP_PASSWORD)'}")
         print(f"file      {path}")
         return 0
@@ -372,9 +376,23 @@ def cmd_email(args) -> int:
     else:
         cfg["port"] = int(_ask("Port", str(old.get("port", 587))))
         cfg["security"] = _ask("Security: starttls, ssl or none", old.get("security", "starttls"))
-    cfg["user"] = _ask("Email address you sign in with", old.get("user", ""))
+    if provider.get("local_bridge"):
+        print("\nProton Mail Bridge protects the connection with its own certificate. If you exported it "
+              "(Bridge > Settings > Advanced settings > Export TLS certificates), give the cert.pem path; "
+              "otherwise press Enter.")
+        cafile = _ask("Path to Bridge's cert.pem", old.get("cafile", ""))
+        if cafile:
+            cfg["cafile"] = cafile
+        elif _ask("Skip the certificate check for this local connection? Mail never leaves your computer "
+                  "before Bridge encrypts it (y/n)", "y").lower().startswith("y"):
+            cfg["verify_tls"] = False
+        user_prompt = "SMTP username shown in Bridge (usually your Proton address)"
+    else:
+        user_prompt = "Email address you sign in with"
+    cfg["user"] = _ask(user_prompt, old.get("user", ""))
     cfg["sender"] = _ask("Send the briefing from (address people will see)", old.get("sender") or cfg["user"])
-    password = getpass.getpass("Password or app password (typing is hidden): ")
+    password = getpass.getpass(("Bridge password" if provider.get("local_bridge") else "Password, app password or token")
+                               + " (typing is hidden): ")
     if not password and old.get("password"):
         password = old["password"]
     store = _ask(f"Save the password in {path}? It's readable only by your user account (y/n)", "y").lower()

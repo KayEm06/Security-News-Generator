@@ -507,6 +507,38 @@ class CliTests(unittest.TestCase):
             self.assertIn("(saved)", out)
             self.assertNotIn("app-pass-123", out)
 
+    def test_email_setup_proton_bridge(self):
+        import ssl
+        from unittest import mock
+        cfg_path = self.tmp / "email.json"
+        # Proton Bridge, no exported cert, skip check, username, sender=default, save pw, test to default
+        answers = iter(["4", "", "y", "me@proton.me", "", "y", ""])
+        with mock.patch.dict("os.environ", {"SECNEWS_EMAIL_CONFIG": str(cfg_path)}, clear=True), \
+             mock.patch("builtins.input", lambda _: next(answers)), \
+             mock.patch("getpass.getpass", lambda _: "bridge-pass"), \
+             mock.patch("smtplib.SMTP") as smtp:
+            server = smtp.return_value.__enter__.return_value
+            code, out, err = self.run_cli("email", "setup")
+        self.assertEqual(code, 0, err)
+        smtp.assert_called_with("127.0.0.1", 1025, timeout=30)
+        ctx = server.starttls.call_args.kwargs["context"]
+        self.assertEqual(ctx.verify_mode, ssl.CERT_NONE)  # Bridge's self-signed certificate is accepted locally
+        server.login.assert_called_once_with("me@proton.me", "bridge-pass")
+        self.assertIs(json.loads(cfg_path.read_text())["verify_tls"], False)
+
+    def test_tls_checks_only_skippable_for_local_mail_apps(self):
+        import ssl
+        from unittest import mock
+        from secnews import briefing as bf
+        cfg_path = self.tmp / "email.json"
+        cfg_path.write_text(json.dumps({"host": "smtp.example.com", "user": "u@example.com", "password": "p", "verify_tls": False}))
+        with mock.patch.dict("os.environ", {"SECNEWS_EMAIL_CONFIG": str(cfg_path)}, clear=True):
+            with self.assertRaises(bf.SmtpConfigError):
+                bf.smtp_settings()
+        remote = bf._tls_context({"host": "smtp.protonmail.ch", "verify_tls": False})
+        self.assertEqual(remote.verify_mode, ssl.CERT_REQUIRED)  # never weakened for a remote server
+        self.assertEqual(bf.PROVIDERS["proton-smtp"]["host"], "smtp.protonmail.ch")
+
     def test_email_test_reports_server_errors(self):
         import smtplib
         from unittest import mock
