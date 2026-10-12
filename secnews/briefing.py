@@ -7,7 +7,8 @@ import os
 import re
 import smtplib
 import ssl
-from datetime import datetime, timezone
+from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 from email.utils import formatdate, make_msgid
 from pathlib import Path
@@ -54,15 +55,97 @@ def pick_stories(articles: list[Article], limit: int) -> list[Article]:
     return ranked[:limit]
 
 
-def build_html(articles: list[Article], taxonomy: Taxonomy, title: str, date: datetime, fragment: bool = False) -> str:
-    """The briefing as a complete email, or (fragment=True) just the stories for a newsletter service,
-    which adds its own header, footer and unsubscribe link."""
+@dataclass
+class Section:
+    heading: str
+    stories: list[Article]
+    note: str = ""
+    catch_up: bool = False  # older stories: show their date instead of "today"
+    label_topics: tuple[str, ...] = ()  # prefer these topics for each story's label (the briefing's focus)
+
+
+def _ts(a: Article) -> datetime:
+    return a.published or datetime.min.replace(tzinfo=timezone.utc)
+
+
+def plan_briefing(articles: list[Article], now: datetime, *, hours: int = 24, focus: list[str] | None = None,
+                  focus_names: str = "", min_focus: int = 5, max_focus: int = 12, catchup_days: int = 14,
+                  general: int = 3, limit: int = 15, already_sent: set[str] | None = None) -> list[Section]:
+    """Choose what goes in the briefing.
+
+    Without ``focus``: the day's most widely reported stories. With ``focus`` (topic ids such as
+    ``ics-ot``): the day's stories on those topics first; if there are fewer than ``min_focus``, older
+    focus stories from the last ``catchup_days`` that haven't been sent before; then the ``general``
+    biggest other stories of the day so nothing major is missed.
+    """
+    sent = already_sent or set()
+    since = now - timedelta(hours=hours)
+    fresh = [a for a in articles if a.published and a.published >= since and a.link not in sent]
+    if not focus:
+        return [Section("Today's top security stories", pick_stories(fresh, limit))]
+
+    wanted = set(focus)
+    is_focus = lambda a: bool(wanted & set(a.topics))  # noqa: E731
+    # Primary-topic matches first, then most widely reported, then newest.
+    rank = lambda a: (a.primary_topic in wanted, len(a.also_reported_by), _ts(a))  # noqa: E731
+    today = sorted((a for a in fresh if is_focus(a)), key=rank, reverse=True)[:max_focus]
+    sections = [Section(f"Today in {focus_names}", today,
+                        "" if today else f"No new {focus_names} stories in the last {hours} hours.",
+                        label_topics=tuple(focus))]
+
+    if len(today) < min_focus:
+        cutoff = now - timedelta(days=catchup_days)
+        shown = {a.link for a in today}
+        older = [a for a in articles if a.published and cutoff <= a.published < since and is_focus(a)
+                 and a.link not in sent and a.link not in shown]
+        older.sort(key=_ts, reverse=True)
+        extra = older[: min_focus - len(today)]
+        if extra:
+            sections.append(Section("Catch up", extra, f"Recent {focus_names} stories you haven't had in a briefing yet.",
+                                    catch_up=True, label_topics=tuple(focus)))
+    if general:
+        others = [a for a in fresh if not is_focus(a)]
+        top = pick_stories(others, general)
+        if top:
+            sections.append(Section("Also in security today", top))
+    return sections
+
+
+# --------------------------------------------------------------------------- sent log
+
+
+def load_sent(path: Path) -> dict:
+    import json
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (FileNotFoundError, ValueError):
+        return {}
+
+
+def record_sent(path: Path, links: list[str], day: str, keep_days: int = 60) -> None:
+    """Remember what went out (so catch-up never repeats a story) and on which day."""
+    import json
+    log = load_sent(path)
+    sent = log.get("links", {})
+    for link in links:
+        sent[link] = day
+    cutoff = (datetime.fromisoformat(day) - timedelta(days=keep_days)).date().isoformat()
+    log = {"last_sent_day": day, "links": {k: v for k, v in sent.items() if v >= cutoff}}
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(log, indent=1), encoding="utf-8")
+
+
+# --------------------------------------------------------------------------- rendering
+
+
+def _story_rows(stories: list[Article], taxonomy: Taxonomy, catch_up: bool, label_topics: tuple[str, ...] = ()) -> str:
     e = html.escape
     color = {t.id: t.color or NAVY for t in taxonomy.topics}
     rows = []
-    for a in articles:
-        topic = a.primary_topic
+    for a in stories:
+        topic = next((t for t in a.topics if t in label_topics), a.primary_topic)
         label = taxonomy.name_of(topic) if topic != "general" else "Security"
+        when = f" &middot; {a.published.strftime('%d %b')}" if catch_up and a.published else ""
         also = f" &middot; also reported by {e(', '.join(a.also_reported_by))}" if a.also_reported_by else ""
         cves = f"<br><span style=\"color:#b91c1c;font-size:12px\">{e(', '.join(a.cves[:6]))}</span>" if a.cves else ""
         img = (f'<td width="120" valign="top" style="padding:0 14px 0 0"><img src="{e(a.image)}" width="120" alt="" '
@@ -72,15 +155,41 @@ def build_html(articles: list[Article], taxonomy: Taxonomy, title: str, date: da
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>{img}<td valign="top">
     <div style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:{color.get(topic, NAVY)}">{e(label)}</div>
     <a href="{e(a.link)}" style="display:block;margin:4px 0;font-size:16px;font-weight:700;line-height:1.3;color:#000;text-decoration:none">{e(a.title)}</a>
-    <div style="font-size:12px;color:{NAVY}">{e(a.source)}{also}</div>
+    <div style="font-size:12px;color:{NAVY}">{e(a.source)}{when}{also}</div>
     <div style="margin-top:6px;font-size:13px;line-height:1.45;color:#333">{e(a.summary[:320])}{'…' if len(a.summary) > 320 else ''}</div>{cves}
   </td></tr></table>
 </td></tr>""")
-    body = "".join(rows) or '<tr><td style="padding:24px 0;color:#666">No new stories in this period.</td></tr>'
+    return "".join(rows)
+
+
+def _sections_html(sections: list[Section], taxonomy: Taxonomy) -> str:
+    e = html.escape
+    parts = []
+    for sec in sections:
+        if not sec.stories and not sec.note:
+            continue
+        parts.append(f'<div style="margin:22px 0 2px;padding-top:8px;border-top:3px solid {NAVY};font-size:17px;'
+                     f'font-weight:800;color:#000">{e(sec.heading)}</div>')
+        if sec.note:
+            parts.append(f'<div style="font-size:13px;font-style:italic;color:{MAROON_TEXT};margin:2px 0 4px">{e(sec.note)}</div>')
+        if sec.stories:
+            parts.append(f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0">'
+                         f'{_story_rows(sec.stories, taxonomy, sec.catch_up, sec.label_topics)}</table>')
+    return "\n".join(parts) or '<p style="color:#666">No stories in this period.</p>'
+
+
+def build_html(sections: list[Section] | list[Article], taxonomy: Taxonomy, title: str, date: datetime,
+               fragment: bool = False) -> str:
+    """The briefing as a complete email, or (fragment=True) just the content for a newsletter service,
+    which adds its own header, footer and unsubscribe link."""
+    if sections and isinstance(sections[0], Article):
+        sections = [Section("Today's top security stories", list(sections))]
+    e = html.escape
+    content = _sections_html(sections, taxonomy)
+    dateline = date.strftime("%A %d %B %Y")
     if fragment:
-        return (f'<p style="font-size:14px;font-weight:700;font-style:italic;color:{MAROON_TEXT}">Today\'s top {len(articles)} '
-                f'security stories &middot; {date.strftime("%A %d %B %Y")}</p>\n'
-                f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0">{body}</table>')
+        return (f'<p style="font-size:14px;font-weight:700;font-style:italic;color:{MAROON_TEXT}">{e(title)} &middot; {dateline}</p>\n'
+                + content)
     return f"""<!doctype html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{e(title)}</title></head>
 <body style="margin:0;padding:0;background:#f4f4f4;font-family:Inter,Segoe UI,Helvetica,Arial,sans-serif">
@@ -88,24 +197,34 @@ def build_html(articles: list[Article], taxonomy: Taxonomy, title: str, date: da
 <table role="presentation" width="640" cellpadding="0" cellspacing="0" style="max-width:640px;width:100%;background:#fff">
   <tr><td style="background:{MAROON};padding:18px 24px;color:#fff">
     <div style="font-family:Georgia,serif;font-size:26px">sanitised<span style="color:#9ab">.</span></div>
-    <div style="font-size:13px;opacity:.9">{e(title)} &middot; {date.strftime('%A %d %B %Y')}</div>
+    <div style="font-size:13px;opacity:.9">{e(title)} &middot; {dateline}</div>
   </td></tr>
   <tr><td style="background:{NAVY};height:6px;font-size:0;line-height:0">&nbsp;</td></tr>
-  <tr><td style="padding:8px 24px 0">
-    <div style="margin:14px 0 2px;font-size:14px;font-weight:700;font-style:italic;color:{MAROON_TEXT}">Today's top {len(articles)} security stories</div>
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">{body}</table>
-  </td></tr>
+  <tr><td style="padding:0 24px 8px">{content}</td></tr>
   <tr><td style="padding:18px 24px;font-size:11px;color:#888">You're receiving this because you subscribed to the {e(title)}.
     Reply to this email to unsubscribe.</td></tr>
 </table></td></tr></table></body></html>"""
 
 
-def build_text(articles: list[Article], title: str, date: datetime) -> str:
+def build_text(sections: list[Section] | list[Article], title: str, date: datetime) -> str:
+    if sections and isinstance(sections[0], Article):
+        sections = [Section("Today's top security stories", list(sections))]
     lines = [f"{title} - {date.strftime('%A %d %B %Y')}", ""]
-    for a in articles:
-        lines += [a.title, f"{a.source} - {a.link}", a.summary[:320], ""]
+    for sec in sections:
+        if not sec.stories and not sec.note:
+            continue
+        lines += [sec.heading.upper(), "=" * len(sec.heading)]
+        if sec.note:
+            lines += [sec.note, ""]
+        for a in sec.stories:
+            when = f" ({a.published.strftime('%d %b')})" if sec.catch_up and a.published else ""
+            lines += [a.title, f"{a.source}{when} - {a.link}", a.summary[:320], ""]
     lines.append("Reply to this email to unsubscribe.")
     return "\n".join(lines)
+
+
+def all_stories(sections: list[Section]) -> list[Article]:
+    return [a for sec in sections for a in sec.stories]
 
 
 # --------------------------------------------------------------------------- Buttondown (newsletter service)
@@ -164,9 +283,14 @@ def buttondown_check(api_key: str) -> int:
     return int(data.get("count", len(data.get("results", []))))
 
 
-def buttondown_send(api_key: str, subject: str, body_html: str, draft: bool = False) -> dict:
-    """Create the briefing in Buttondown and send it to every subscriber (or leave it as a draft)."""
+def buttondown_send(api_key: str, subject: str, body_html: str, draft: bool = False,
+                    send_at: datetime | None = None) -> dict:
+    """Create the briefing in Buttondown and send it to every subscriber now, at ``send_at``
+    (Buttondown holds it and sends it then), or leave it as a draft."""
     payload = {"subject": subject, "body": body_html, "status": "draft" if draft else "about_to_send"}
+    if send_at and not draft:
+        payload["status"] = "scheduled"
+        payload["publish_date"] = send_at.astimezone(timezone.utc).isoformat()
     # Buttondown requires this explicit confirmation before an API call may email subscribers.
     headers = {} if draft else {"X-Buttondown-Live-Dangerously": "true"}
     return _buttondown("POST", "/emails", api_key, payload, headers)

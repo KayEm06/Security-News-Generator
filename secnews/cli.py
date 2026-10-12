@@ -107,6 +107,12 @@ def build_parser() -> argparse.ArgumentParser:
                    help="write the briefing ready to paste into a new Buttondown email (works on any Buttondown plan)")
     b.add_argument("--to", action="append", metavar="EMAIL", help="send to these addresses instead of the subscriber list")
     b.add_argument("--subscribers", metavar="FILE", help="subscriber list (default: ~/.secnews/subscribers.txt)")
+    b.add_argument("--focus", metavar="TOPICS",
+                   help="topics to lead with, e.g. ics-ot,iot-hardware (default: briefing_focus in site.json; 'all' for none)")
+    b.add_argument("--at", metavar="HH:MM", help="deliver at this local time, e.g. 09:00 (Buttondown schedules it)")
+    b.add_argument("--timezone", metavar="ZONE", help="time zone for --at and the date (default: briefing_timezone in site.json)")
+    b.add_argument("--once-per-day", action="store_true", help="do nothing if today's briefing has already been sent")
+    b.add_argument("--sent-log", metavar="FILE", help="record of stories already sent (default: next to the archive)")
 
     e = sub.add_parser("email", help="set up and test sending email (for the daily briefing)",
                        description="  secnews email setup                 # guided set-up, then sends a test email\n"
@@ -263,26 +269,57 @@ def cmd_fetch(args) -> int:
     return 0
 
 
+def _briefing_tz(name: str):
+    from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+    try:
+        return ZoneInfo(name)
+    except (ZoneInfoNotFoundError, ValueError):
+        raise SystemExit(f"error: unknown time zone '{name}'. On Windows, run 'pip install tzdata' once; "
+                         "otherwise use a name like Europe/London.")
+
+
 def cmd_briefing(args) -> int:
+    import time
     from . import briefing as bf
 
     taxonomy = load_taxonomy(args.categories_file)
     site = load_site(args.site_file)
     title = site.get("briefing_title") or "Daily Briefing"
     limit = args.max or int(site.get("briefing_max_stories") or 15)
+    focus_raw = args.focus if args.focus is not None else ",".join(site.get("briefing_focus") or [])
+    try:
+        focus = sorted(resolve_ids([focus_raw], taxonomy.topics, "topic")) if focus_raw and focus_raw != "all" else []
+    except ValueError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
+    focus_label = site.get("briefing_focus_label") or " & ".join(taxonomy.name_of(t) for t in focus)
+    tz = _briefing_tz(args.timezone or site.get("briefing_timezone") or "UTC")
+
+    now = datetime.now(timezone.utc)
+    local_today = now.astimezone(tz).date().isoformat()
+    sent_log = Path(args.sent_log) if args.sent_log else (
+        (Path(args.archive).parent if args.archive else default_path().parent) / "briefing-sent.json")
+    log = bf.load_sent(sent_log)
+    if args.once_per_day and (args.send or args.draft) and log.get("last_sent_day") == local_today:
+        _log(args, f"Today's briefing ({local_today}) has already gone out; nothing to do.")
+        return 0
 
     articles, everything, _, archive_path = _gather(args, taxonomy)
-    now = datetime.now(timezone.utc)
-    recent = filter_articles(articles, since=now - timedelta(hours=args.hours))
-    stories = bf.pick_stories(recent, limit)
+    sections = bf.plan_briefing(
+        articles, now, hours=args.hours, focus=focus, focus_names=focus_label,
+        min_focus=int(site.get("briefing_min_focus_stories") or 5), max_focus=limit,
+        catchup_days=int(site.get("briefing_catchup_days") or 14),
+        general=int(site.get("briefing_general_stories", 3)) if focus else 0,
+        limit=limit, already_sent=set(log.get("links", {})))
+    stories = bf.all_stories(sections)
     _enrich_and_archive(args, stories, everything, archive_path)
 
-    html_body = bf.build_html(stories, taxonomy, title, now)
-    subject = f"{title}: {now.strftime('%d %b %Y')}"
+    html_body = bf.build_html(sections, taxonomy, title, now)
+    subject = f"{title}: {now.astimezone(tz).strftime('%d %b %Y')}"
     if args.paste:
         out = Path(args.output or "briefing-for-buttondown.html")
         out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text(bf.build_html(stories, taxonomy, title, now, fragment=True), encoding="utf-8")
+        out.write_text(bf.build_html(sections, taxonomy, title, now, fragment=True), encoding="utf-8")
         print(f"Saved {len(stories)} stories to {out}.\n"
               f"In Buttondown: New email > subject \"{subject}\" > switch the editor to HTML/Markdown mode >\n"
               f"paste the contents of {out} > Send.")
@@ -293,22 +330,39 @@ def cmd_briefing(args) -> int:
         _log(args, f"Wrote briefing with {len(stories)} stories to {args.output}")
     if not (args.send or args.draft):
         if not args.output:
-            sys.stdout.write(bf.build_text(stories, title, now) + "\n")
+            sys.stdout.write(bf.build_text(sections, title, now) + "\n")
         return 0
+    if not stories:
+        _log(args, "No stories to send, so nothing was sent.")
+        return 0
+
+    # --at HH:MM: deliver at that local time. Runs that start late send straight away.
+    send_at = None
+    if args.at:
+        try:
+            hh, mm = (int(x) for x in args.at.split(":"))
+            send_at = datetime.combine(now.astimezone(tz).date(), datetime.min.time(), tz).replace(hour=hh, minute=mm)
+        except ValueError:
+            print(f"error: --at expects HH:MM, got '{args.at}'", file=sys.stderr)
+            return 2
+        if send_at <= now + timedelta(minutes=2):
+            send_at = None
 
     bd = bf.buttondown_settings()
     if bd and not args.to:
-        if not stories:
-            _log(args, "No stories in this period, so nothing was sent.")
-            return 0
         try:
-            result = bf.buttondown_send(bd["api_key"], subject, bf.build_html(stories, taxonomy, title, now, fragment=True),
-                                        draft=args.draft)
+            result = bf.buttondown_send(bd["api_key"], subject, bf.build_html(sections, taxonomy, title, now, fragment=True),
+                                        draft=args.draft, send_at=send_at)
         except bf.ButtondownError as e:
             print(f"error: {e}", file=sys.stderr)
             return 1
         where = result.get("absolute_url") or "your Buttondown dashboard"
-        _log(args, f"{'Created a draft' if args.draft else 'Sent the briefing to your Buttondown subscribers'}: {where}")
+        if args.draft:
+            _log(args, f"Created a draft: {where}")
+            return 0
+        when = f"scheduled for {send_at.strftime('%H:%M %Z')}" if send_at else "sent"
+        _log(args, f"Briefing with {len(stories)} stories {when} to your Buttondown subscribers: {where}")
+        bf.record_sent(sent_log, [a.link for a in stories], local_today)
         return 0
     if args.draft:
         print("error: --draft needs Buttondown. Run 'secnews email setup' and choose Buttondown.", file=sys.stderr)
@@ -324,10 +378,19 @@ def cmd_briefing(args) -> int:
     except bf.SmtpConfigError as e:
         print(f"error: email isn't set up: {e}.", file=sys.stderr)
         return 2
-    failed = bf.send(recipients, subject, html_body, bf.build_text(stories, title, now), settings)
+    if send_at:
+        wait = (send_at - datetime.now(timezone.utc)).total_seconds()
+        if wait > 3 * 3600:
+            print(f"error: {args.at} is more than 3 hours away; start the job closer to the send time.", file=sys.stderr)
+            return 2
+        _log(args, f"Waiting until {send_at.strftime('%H:%M %Z')} to send…")
+        time.sleep(max(0, wait))
+    failed = bf.send(recipients, subject, html_body, bf.build_text(sections, title, now), settings)
     _log(args, f"Sent briefing to {len(recipients) - len(failed)} of {len(recipients)} subscribers")
     for addr in failed:
         print(f"  ✗ could not send to {addr}", file=sys.stderr)
+    if len(failed) < len(recipients):
+        bf.record_sent(sent_log, [a.link for a in stories], local_today)
     return 1 if failed and len(failed) == len(recipients) else 0
 
 

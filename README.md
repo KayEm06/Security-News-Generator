@@ -52,7 +52,31 @@ Clearing your browser data, or using a private window, removes them. If you use 
 
 ## Daily briefing email
 
-`secnews briefing` builds an email of the day's top stories (most widely reported first) from the last 24 hours. Preview it with `python3 -m secnews briefing -o briefing.html`.
+`secnews briefing` builds the daily briefing email. Preview it with `python3 -m secnews briefing -o briefing.html`.
+
+### What goes in it
+
+The briefing is set up as an **IoT & ICS/OT Daily Briefing**. Each email has up to three sections:
+
+1. **Today in IoT & ICS/OT:** stories from the last 24 hours tagged *ICS / OT & Critical Infrastructure* or *IoT & Hardware*. Stories mainly about those topics come first, then the most widely reported, then the newest.
+2. **Catch up:** only when there are fewer than 5 new focus stories. It tops up with IoT/ICS stories from the last 14 days that haven't been in a briefing before. The tool logs what it has sent (`briefing-sent.json`, next to the archive), so nothing is repeated.
+3. **Also in security today:** the day's three most widely reported other stories, so nothing major is missed.
+
+All of this is set in `secnews/data/site.json`:
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `briefing_focus` | `["ics-ot", "iot-hardware"]` | topic ids to lead with (see `secnews categories`). Use `[]` for a general briefing |
+| `briefing_focus_label` | `IoT & ICS/OT` | how the focus is named in the email |
+| `briefing_min_focus_stories` | `5` | top up with catch-up stories below this many |
+| `briefing_catchup_days` | `14` | how far back catch-up looks |
+| `briefing_general_stories` | `3` | how many other big stories to add (0 for none) |
+| `briefing_max_stories` | `12` | most focus stories in one email |
+| `briefing_timezone` | `Europe/London` | for the date and for `--at` |
+
+For a one-off, `--focus ransomware,vulnerabilities` or `--focus all` overrides the setting.
+
+**Sending at a set time:** `--at 09:00` delivers at 09:00 in `briefing_timezone`. With Buttondown, the briefing is handed over in advance and Buttondown sends it at exactly that time. With an email account, the command waits until then, starting no more than 3 hours early. If a run starts after the time has passed, it sends straight away. `--once-per-day` makes extra runs on the same day do nothing. On Windows, run `pip install tzdata` once so time zones work.
 
 There are two ways to send it. Run `python3 -m secnews email setup` and pick one.
 
@@ -118,7 +142,7 @@ The repository includes two workflows. Scheduled runs only start once they're on
 | Workflow | When | What it does |
 |---|---|---|
 | **Update news site** (`update-site.yml`) | every 4 hours | fetches all sources, keeps the archive between runs, builds the site, and keeps a downloadable copy (*Actions › run › Artifacts › news-site*) |
-| **Daily briefing email** (`daily-briefing.yml`) | 06:47 UTC every day | sends the briefing to everyone on the subscriber list |
+| **Daily briefing email** (`daily-briefing.yml`) | delivered at 09:00 UK time every day | builds the IoT & ICS/OT briefing early (07:17 UTC, with a backup run at 08:17) and has Buttondown send it at exactly 09:00, all year round. With an email account, the job waits until 09:00, which uses about 60–100 extra Actions minutes a day |
 
 Set-up, in the repository on GitHub:
 
@@ -141,15 +165,15 @@ Schedule the commands with your computer's scheduler. Use the full path to the f
 
 **macOS / Linux** (`crontab -e`):
 ```cron
-# rebuild the site every 4 hours, send the briefing at 07:45 on weekdays
+# rebuild the site every 4 hours; prepare the briefing at 08:30 and deliver it at 09:00 every day
 0 */4 * * *  cd ~/Security-News-Generator && python3 -m secnews fetch -q -o reports/digest.html
-45 7 * * 1-5 cd ~/Security-News-Generator && python3 -m secnews briefing -q --send
+30 8 * * * cd ~/Security-News-Generator && python3 -m secnews briefing -q --send --at 09:00 --once-per-day
 ```
 
 **Windows** (Command Prompt):
 ```bat
 schtasks /create /tn "secnews site" /sc hourly /mo 4 /tr "cmd /c cd /d %USERPROFILE%\Security-News-Generator && python -m secnews fetch -q -o reports\digest.html"
-schtasks /create /tn "secnews briefing" /sc weekly /d MON,TUE,WED,THU,FRI /st 07:45 /tr "cmd /c cd /d %USERPROFILE%\Security-News-Generator && python -m secnews briefing -q --send"
+schtasks /create /tn "secnews briefing" /sc daily /st 08:30 /tr "cmd /c cd /d %USERPROFILE%\Security-News-Generator && python -m secnews briefing -q --send --at 09:00 --once-per-day"
 ```
 
 Your computer has to be on at those times. Keep the digest path the same so saved stories carry over.

@@ -330,6 +330,8 @@ class CliTests(unittest.TestCase):
             if not pages:
                 args = (*args, "--no-page-lookup")  # fixture links point at example.com; keep tests offline
             args = (*args, "--archive", str(archive)) if archive else (*args, "--no-archive")
+        if args and args[0] == "briefing" and "--sent-log" not in args:
+            args = (*args, "--sent-log", str(self.tmp / "sent.json"))  # never touch ~/.secnews in tests
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
             code = main(["--sources-file", str(self.sources), *args])
         return code, out.getvalue(), err.getvalue()
@@ -444,13 +446,13 @@ class CliTests(unittest.TestCase):
     def test_briefing_preview(self):
         self._recent_feed()
         out = self.tmp / "briefing.html"
-        code, _, err = self.run_cli("briefing", "-o", str(out))
+        code, _, err = self.run_cli("briefing", "--focus", "all", "-o", str(out))
         self.assertEqual(code, 0, err)
         html = out.read_text()
         self.assertIn("Ransomware hits hospital chain", html)
         self.assertIn("CVE-2026-24851", html)
         self.assertNotIn("Old story from last week", html)  # outside the last 24 hours
-        self.assertIn("Today's top 2 security stories", html)
+        self.assertIn("top security stories", html)
 
     def test_briefing_send(self):
         from unittest import mock
@@ -570,12 +572,84 @@ class CliTests(unittest.TestCase):
             self.assertEqual(calls[-1].get_header("X-buttondown-live-dangerously"), "true")
             self.assertIn("Ransomware hits hospital chain", sent["body"])
             self.assertNotIn("<html", sent["body"])  # Buttondown wraps it with its own header/footer/unsubscribe
-            self.assertIn("Sent the briefing to your Buttondown subscribers", err)
+            self.assertIn("2 stories sent to your Buttondown subscribers", err)
 
-            code, _, err = self.run_cli("briefing", "--draft")
+            code, _, err = self.run_cli("briefing", "--draft", "--sent-log", str(self.tmp / "sent2.json"))
             self.assertEqual(code, 0, err)
             self.assertEqual(json.loads(calls[-1].data)["status"], "draft")
             self.assertIsNone(calls[-1].get_header("X-buttondown-live-dangerously"))
+
+    def test_focus_briefing_plan(self):
+        from secnews.briefing import plan_briefing
+        now = datetime.now(timezone.utc)
+        c = Classifier(TAX)
+
+        def art(title, hours, also=()):
+            return c.classify(Article(title=title, link=f"https://n/{title}", source="S",
+                                      published=now - timedelta(hours=hours), also_reported_by=list(also)))
+        arts = [
+            art("Unitronics PLCs targeted by hacktivists", 3),
+            art("Mirai variant exploits DrayTek routers", 5),
+            art("Huge ransomware attack on retailer", 2, also=["A", "B"]),
+            art("Phishing kit targets Microsoft 365", 4),
+            art("Siemens SIMATIC flaw patched", 30),              # 1 day ago: catch-up material
+            art("Hikvision cameras exposed online", 24 * 6),     # 6 days ago: catch-up material
+            art("Modbus attack disrupts heating", 24 * 20),      # too old for catch-up (14 days)
+            art("Moxa industrial router takeover", 50),          # already sent before
+        ]
+        sent = {"https://n/Moxa industrial router takeover"}
+        secs = plan_briefing(arts, now, focus=["ics-ot", "iot-hardware"], focus_names="IoT & ICS/OT",
+                             min_focus=5, catchup_days=14, general=1, already_sent=sent)
+        titles = {s.heading: [a.title for a in s.stories] for s in secs}
+        self.assertEqual(set(titles["Today in IoT & ICS/OT"]),
+                         {"Unitronics PLCs targeted by hacktivists", "Mirai variant exploits DrayTek routers"})
+        self.assertEqual(titles["Catch up"], ["Siemens SIMATIC flaw patched", "Hikvision cameras exposed online"])
+        self.assertEqual(titles["Also in security today"], ["Huge ransomware attack on retailer"])  # most widely reported
+        self.assertTrue(next(s for s in secs if s.heading == "Catch up").catch_up)
+        # Enough fresh focus stories: no catch-up section.
+        secs = plan_briefing(arts, now, focus=["ics-ot", "iot-hardware"], focus_names="X", min_focus=2, general=0)
+        self.assertEqual([s.heading for s in secs], ["Today in X"])
+
+    def test_sent_log_prunes_old_entries(self):
+        from secnews.briefing import load_sent, record_sent
+        path = self.tmp / "sent.json"
+        record_sent(path, ["https://a"], "2026-08-01")
+        record_sent(path, ["https://b"], "2026-10-12", keep_days=60)
+        log = load_sent(path)
+        self.assertEqual((log["last_sent_day"], list(log["links"])), ("2026-10-12", ["https://b"]))
+
+    def test_briefing_scheduled_for_9am_and_once_per_day(self):
+        from unittest import mock
+        from zoneinfo import ZoneInfo
+        self._recent_feed()
+        london = ZoneInfo("Europe/London")
+        local_now = datetime.now(london)
+        calls = []
+        env = {"SECNEWS_BUTTONDOWN_API_KEY": "k", "SECNEWS_EMAIL_CONFIG": str(self.tmp / "none.json")}
+        with mock.patch.dict("os.environ", env, clear=True), \
+             mock.patch("urllib.request.urlopen", self._fake_buttondown(calls)):
+            if local_now.hour < 22:  # schedule for an hour from now (same day)
+                at = (local_now + timedelta(hours=1)).strftime("%H:%M")
+                code, _, err = self.run_cli("briefing", "--focus", "all", "--send", "--at", at, "--timezone", "Europe/London",
+                                            "--once-per-day")
+                self.assertEqual(code, 0, err)
+                payload = json.loads(calls[-1].data)
+                self.assertEqual(payload["status"], "scheduled")
+                when = datetime.fromisoformat(payload["publish_date"]).astimezone(london)
+                self.assertEqual(when.strftime("%H:%M"), at)
+                self.assertIn("scheduled for", err)
+                # A second run the same day (e.g. the backup schedule) does nothing.
+                n = len(calls)
+                code, _, err = self.run_cli("briefing", "--focus", "all", "--send", "--at", at, "--timezone", "Europe/London",
+                                            "--once-per-day")
+                self.assertEqual((code, len(calls)), (0, n))
+                self.assertIn("already gone out", err)
+            if local_now.hour >= 1:  # the send time has already passed: deliver immediately
+                past = (local_now - timedelta(hours=1)).strftime("%H:%M")
+                code, _, err = self.run_cli("briefing", "--focus", "all", "--send", "--at", past, "--timezone", "Europe/London",
+                                            "--sent-log", str(self.tmp / "late.json"))
+                self.assertEqual(code, 0, err)
+                self.assertEqual(json.loads(calls[-1].data)["status"], "about_to_send")
 
     def test_buttondown_without_api_access_suggests_paste(self):
         from unittest import mock

@@ -10,7 +10,12 @@ name: Daily briefing email
 
 on:
   schedule:
-    - cron: "47 6 * * *" # 06:47 UTC daily = 07:47 UK summer time, 06:47 winter
+    # Delivered at 09:00 UK time every day. GitHub schedules are in UTC and ignore summer time, so the
+    # job runs early (08:17 UK in summer, 07:17 in winter), builds the briefing and has Buttondown send it
+    # at exactly 09:00 (an email account waits until 09:00 instead). The second run is a backup in case
+    # GitHub skips or badly delays the first; --once-per-day stops it sending twice.
+    - cron: "17 7 * * *"
+    - cron: "17 8 * * *"
   workflow_dispatch:
 
 permissions:
@@ -50,7 +55,8 @@ jobs:
           SUBSCRIBERS: ${{ secrets.SECNEWS_SUBSCRIBERS }}
         run: |
           printf '%s\n' "$SUBSCRIBERS" | tr ',;' '\n\n' > subscribers.txt
-          python -m secnews briefing --archive .secnews/archive.json --subscribers subscribers.txt --send -o briefing.html
+          python -m secnews briefing --archive .secnews/archive.json --subscribers subscribers.txt \
+            --send --at 09:00 --once-per-day -o briefing.html
           rm -f subscribers.txt
 
       - name: Save article archive
