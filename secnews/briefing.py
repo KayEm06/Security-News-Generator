@@ -151,7 +151,11 @@ def save_email_config(cfg: dict, path: Path | None = None) -> Path:
 def smtp_settings() -> dict:
     """Email settings from ~/.secnews/email.json, overridden by SECNEWS_SMTP_* environment variables."""
     cfg, env = load_email_config(), os.environ
-    get = lambda key, env_name, default="": env.get(env_name) or str(cfg.get(key) or default)  # noqa: E731
+    def get(key: str, env_name: str, default="") -> str:
+        if env.get(env_name):
+            return env[env_name]
+        value = cfg.get(key)
+        return str(default) if value is None or value == "" else str(value)  # keeps a saved False/0
     s = {
         "host": get("host", "SECNEWS_SMTP_HOST"),
         "port": int(get("port", "SECNEWS_SMTP_PORT", 587)),
