@@ -59,7 +59,7 @@ Clearing your browser data, or using a private window, removes them. If you use 
 The briefing is set up as an **IoT & ICS/OT Daily Briefing**. Each email has up to three sections:
 
 1. **Today in IoT & ICS/OT:** stories from the last 24 hours tagged *ICS / OT & Critical Infrastructure* or *IoT & Hardware*. Stories mainly about those topics come first, then the most widely reported, then the newest.
-2. **Catch up:** only when there are fewer than 5 new focus stories. It tops up with IoT/ICS stories from the last 14 days that haven't been in a briefing before. The tool logs what it has sent (`briefing-sent.json`, next to the archive), so nothing is repeated.
+2. **Catch up:** only when there are fewer than 5 new focus stories. It tops up with IoT/ICS stories from the last 14 days that haven't been in a briefing before. The tool logs what it has sent (`briefing-sent.json`, next to the archive), so nothing is repeated. After a test send, `--forget-sent YYYY-MM-DD` (or the *Run workflow* box on the Daily briefing email workflow) undoes that day's entry so the stories can go out again.
 3. **Also in security today:** the day's three most widely reported other stories, so nothing major is missed.
 
 All of this is set in `secnews/data/site.json`:

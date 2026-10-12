@@ -43,7 +43,7 @@
     {"name": "Cyber Security News", "url": "https://cybersecuritynews.com/feed/", "type": "news"},
 
     {"name": "CISA Known Exploited Vulnerabilities", "url": "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json", "type": "government", "format": "cisa-kev", "categories": ["vulnerabilities"]},
-    {"name": "CISA ICS Advisories", "url": "https://www.cisa.gov/cybersecurity-advisories/ics-advisories.xml", "type": "government", "categories": ["ics-ot", "vulnerabilities"], "locations": ["north-america"]},
+    {"name": "CISA ICS Advisories", "url": "https://www.cisa.gov/cybersecurity-advisories/ics-advisories.xml", "type": "government", "categories": ["ics-ot", "vulnerabilities"], "locations": ["north-america"], "enabled": false, "note": "cisa.gov refuses requests from GitHub Actions servers (403), so this only works when run from your own computer. SecurityWeek ICS/OT and Security Affairs ICS-SCADA report these advisories too."},
     {"name": "Microsoft Security Response Center", "url": "https://msrc.microsoft.com/blog/feed", "type": "vendor-research", "categories": ["vulnerabilities"]},
 
     {"name": "Exploit-DB", "url": "https://www.exploit-db.com/rss.xml", "type": "specialist", "categories": ["vulnerabilities"]},
@@ -65,15 +65,14 @@
     {"name": "Cyble", "url": "https://cyble.com/feed/", "type": "specialist"},
     {"name": "Citizen Lab", "url": "https://citizenlab.ca/feed/", "type": "specialist", "categories": ["nation-state", "malware"]},
 
-    {"name": "Dragos", "url": "https://www.dragos.com/feed/", "type": "specialist", "categories": ["ics-ot"], "industries": ["energy"]},
+    {"name": "Dragos", "url": "https://www.dragos.com/blog.rss", "type": "specialist", "categories": ["ics-ot"], "industries": ["energy"], "enabled": false, "note": "Dragos's own feed (linked from dragos.com/blog) currently comes back empty. Enable it again once it has posts."},
     {"name": "SecurityWeek ICS/OT", "url": "https://www.securityweek.com/category/ics-ot/feed/", "type": "specialist", "categories": ["ics-ot"]},
     {"name": "Industrial Cyber", "url": "https://industrialcyber.co/feed/", "type": "specialist", "categories": ["ics-ot"]},
     {"name": "Security Affairs ICS-SCADA", "url": "https://securityaffairs.com/category/ics-scada/feed", "type": "specialist", "categories": ["ics-ot"]},
     {"name": "Waterfall Security", "url": "https://waterfall-security.com/feed/", "type": "specialist", "categories": ["ics-ot"]},
     {"name": "Forescout Vedere Labs", "url": "https://www.forescout.com/feed/", "type": "specialist", "categories": ["iot-hardware"]},
-    {"name": "CISA ICS Medical Advisories", "url": "https://www.cisa.gov/cybersecurity-advisories/ics-medical-advisories.xml", "type": "government", "categories": ["ics-ot", "iot-hardware", "vulnerabilities"], "industries": ["healthcare"], "locations": ["north-america"]},
+    {"name": "CISA ICS Medical Advisories", "url": "https://www.cisa.gov/cybersecurity-advisories/ics-medical-advisories.xml", "type": "government", "categories": ["ics-ot", "iot-hardware", "vulnerabilities"], "industries": ["healthcare"], "locations": ["north-america"], "enabled": false, "note": "cisa.gov refuses requests from GitHub Actions servers (403), so this only works when run from your own computer. SecurityWeek ICS/OT and Security Affairs ICS-SCADA report these advisories too."},
     {"name": "SecurityWeek IoT Security", "url": "https://www.securityweek.com/category/iot-security/feed/", "type": "specialist", "categories": ["iot-hardware"]},
-    {"name": "Help Net Security (IoT)", "url": "https://www.helpnetsecurity.com/tag/iot/feed/", "type": "specialist", "categories": ["iot-hardware"]},
     {"name": "IoT Security Foundation", "url": "https://iotsecurityfoundation.org/feed/", "type": "specialist", "categories": ["iot-hardware"]},
     {"name": "Hackaday (Security Hacks)", "url": "https://hackaday.com/category/security-hacks/feed/", "type": "specialist", "categories": ["iot-hardware"]},
     {"name": "Shodan Blog", "url": "https://blog.shodan.io/rss/", "type": "specialist", "categories": ["iot-hardware"]},

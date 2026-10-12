@@ -113,6 +113,8 @@ def build_parser() -> argparse.ArgumentParser:
     b.add_argument("--timezone", metavar="ZONE", help="time zone for --at and the date (default: briefing_timezone in site.json)")
     b.add_argument("--once-per-day", action="store_true", help="do nothing if today's briefing has already been sent")
     b.add_argument("--sent-log", metavar="FILE", help="record of stories already sent (default: next to the archive)")
+    b.add_argument("--forget-sent", metavar="YYYY-MM-DD",
+                   help="undo that day's briefing in the sent log (e.g. a test) so its stories can be sent again, then stop")
 
     e = sub.add_parser("email", help="set up and test sending email (for the daily briefing)",
                        description="  secnews email setup                 # guided set-up, then sends a test email\n"
@@ -299,6 +301,10 @@ def cmd_briefing(args) -> int:
     local_today = now.astimezone(tz).date().isoformat()
     sent_log = Path(args.sent_log) if args.sent_log else (
         (Path(args.archive).parent if args.archive else default_path().parent) / "briefing-sent.json")
+    if args.forget_sent:
+        n = bf.forget_sent(sent_log, args.forget_sent)
+        _log(args, f"Forgot {n} stories sent on {args.forget_sent}; they can go out again.")
+        return 0
     log = bf.load_sent(sent_log)
     if args.once_per_day and (args.send or args.draft) and log.get("last_sent_day") == local_today:
         _log(args, f"Today's briefing ({local_today}) has already gone out; nothing to do.")

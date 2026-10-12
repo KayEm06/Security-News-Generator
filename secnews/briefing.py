@@ -135,6 +135,22 @@ def record_sent(path: Path, links: list[str], day: str, keep_days: int = 60) -> 
     path.write_text(json.dumps(log, indent=1), encoding="utf-8")
 
 
+def forget_sent(path: Path, day: str) -> int:
+    """Undo one day's briefing in the log (e.g. a test send), so its stories can go out again.
+    Returns how many stories were forgotten."""
+    import json
+    log = load_sent(path)
+    if not log:
+        return 0
+    sent = log.get("links", {})
+    kept = {k: v for k, v in sent.items() if v != day}
+    log["links"] = kept
+    if log.get("last_sent_day") == day:
+        log["last_sent_day"] = max(kept.values(), default=None)
+    path.write_text(json.dumps(log, indent=1), encoding="utf-8")
+    return len(sent) - len(kept)
+
+
 # --------------------------------------------------------------------------- rendering
 
 
