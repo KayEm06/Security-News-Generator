@@ -382,20 +382,17 @@
       "name": "ICS / OT & Critical Infrastructure",
       "color": "#172554",
       "keywords": [
-        "ICS",
-        "SCADA",
-        "OT",
-        "operational technology",
-        "industrial control",
-        "PLC",
-        "critical infrastructure",
-        "power grid",
-        "water utility",
-        "water utilities",
-        "pipeline",
-        "Siemens",
-        "Schneider Electric",
-        "Rockwell"
+        "ICS", "SCADA", "OT", "IIoT", "operational technology", "industrial control", "industrial control system",
+        "industrial cybersecurity", "industrial network", "PLC", "programmable logic controller", "HMI", "RTU", "DCS",
+        "distributed control system", "safety instrumented system", "engineering workstation",
+        "critical infrastructure", "CNI", "power grid", "electric grid", "smart grid", "substation", "water utility",
+        "water treatment", "wastewater", "dam", "gas pipeline", "oil pipeline", "pipeline operator", "oil and gas",
+        "Modbus", "DNP3", "OPC UA", "Profinet", "EtherNet/IP", "BACnet", "IEC 61850", "IEC 62443", "NERC CIP",
+        "building management system", "building automation", "railway signalling", "maritime",
+        "Siemens", "SIMATIC", "Schneider Electric", "Modicon", "Rockwell", "Allen-Bradley", "Honeywell", "ABB",
+        "Emerson", "Yokogawa", "Mitsubishi Electric", "Moxa", "Phoenix Contact", "WAGO", "Unitronics", "CODESYS",
+        "Triton", "Trisis", "Industroyer", "Pipedream", "Incontroller", "FrostyGoop", "Fuxnet", "IOCONTROL",
+        "Stuxnet", "Volt Typhoon", "CyberAv3ngers", "ICS advisory", "ICS advisories"
       ]
     },
     {
@@ -403,10 +400,16 @@
       "name": "IoT & Hardware",
       "color": "#0891b2",
       "keywords": [
-        "IoT", "Internet of Things", "smart device", "smart devices", "smart home", "connected device",
-        "router", "routers", "firmware", "hardware", "chip", "chips", "processor", "CPU", "UEFI", "BIOS",
-        "camera", "cameras", "IP camera", "DVR", "NVR", "NAS", "printer", "printers", "embedded",
-        "Bluetooth", "Wi-Fi", "side-channel", "TPM"
+        "IoT", "Internet of Things", "smart device", "smart home", "connected device", "edge device",
+        "router", "firmware", "hardware vulnerability", "hardware hacking", "chipset", "microcontroller", "SoC",
+        "CPU", "UEFI", "BIOS", "TPM", "side-channel", "baseband",
+        "camera", "IP camera", "security camera", "DVR", "NVR", "NAS", "printer", "embedded device",
+        "embedded system", "Bluetooth", "Wi-Fi", "Zigbee", "Z-Wave", "LoRaWAN",
+        "Mirai", "Hikvision", "Dahua", "D-Link", "TP-Link", "Netgear", "Zyxel", "DrayTek", "Ubiquiti", "MikroTik",
+        "Synology", "QNAP", "Qualcomm", "MediaTek", "RISC-V",
+        "connected car", "connected vehicle", "vehicle", "automotive", "Tesla", "infotainment", "CAN bus",
+        "EV charger", "smart meter", "smart lock", "smart TV", "smart speaker", "wearable", "drone", "satellite",
+        "medical device", "infusion pump", "pacemaker", "insulin pump"
       ]
     }
   ],

@@ -28,7 +28,9 @@ def _compile(keywords: list[str]) -> list[tuple[str, re.Pattern, bool]]:
         words = re.split(r"[\s\-]+", kw.strip())
         acronym = kw.isupper() and len(kw) <= 4
         last = words[-1]
-        if acronym or not last[-1:].isalpha() or last.endswith("s"):
+        if acronym:
+            tail = re.escape(last) + "s?"  # PLC -> PLCs, HMI -> HMIs (still case-sensitive)
+        elif not last[-1:].isalpha() or last.endswith("s"):
             tail = re.escape(last)
         elif re.search(r"[^aeiou]y$", last, re.IGNORECASE):  # facility -> facilities
             tail = re.escape(last[:-1]) + "(?:y|ies)"

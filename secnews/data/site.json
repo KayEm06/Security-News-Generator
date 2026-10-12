@@ -1,10 +1,20 @@
 {
   "_comment": "Settings for the HTML page and the daily briefing email. Edit freely.",
 
-  "_subscribe": "Daily briefing sign-up box. Set ONE of these. subscribe_url: a newsletter provider's form/endpoint (Buttondown, Mailchimp, Formspree, a Microsoft/Google Form...) that accepts a POSTed 'email' field. subscribe_email: your own address; the box opens a pre-filled email to you, and you add the person with 'secnews subscribers add'. Leave both empty to hide the sign-up box.",
+  "_subscribe": "Daily briefing sign-up box. Set ONE of these. subscribe_url: a newsletter provider's form/endpoint (Buttondown, Mailchimp, Formspree, a Microsoft/Google Form...) that accepts a POSTed 'email' field. subscribe_email: your own address; the box opens a pre-filled email to you, and you add the person with 'secnews subscribers add'. Leave both empty to show a 'not connected yet' message.",
   "subscribe_url": "",
   "subscribe_email": "",
 
-  "briefing_title": "sanitised. Daily Briefing",
-  "briefing_max_stories": 15
+  "briefing_title": "sanitised. IoT & ICS/OT Daily Briefing",
+  "briefing_max_stories": 12,
+
+  "_focus": "The briefing leads with these topics (ids from categories.json, see 'secnews categories'). If fewer than briefing_min_focus_stories are new, it tops up with focus stories from the last briefing_catchup_days that haven't been sent yet, then adds briefing_general_stories of the day's biggest other stories. Set briefing_focus to [] for a general briefing.",
+  "briefing_focus": ["ics-ot", "iot-hardware"],
+  "briefing_focus_label": "IoT & ICS/OT",
+  "briefing_min_focus_stories": 5,
+  "briefing_catchup_days": 14,
+  "briefing_general_stories": 3,
+
+  "_timezone": "Used for the date in the subject line and for 'secnews briefing --at 09:00'. Any IANA name, e.g. Europe/London, Europe/Warsaw, America/New_York.",
+  "briefing_timezone": "Europe/London"
 }
