@@ -483,7 +483,8 @@ class CliTests(unittest.TestCase):
         import stat
         from unittest import mock
         cfg_path = self.tmp / "email.json"
-        answers = iter(["2", "me@gmail.com", "", "y", "boss@example.com"])  # Gmail, user, sender=default, save pw, test to
+        # email account, Gmail, user, sender=default, save pw, test to
+        answers = iter(["2", "2", "me@gmail.com", "", "y", "boss@example.com"])
         with mock.patch.dict("os.environ", {"SECNEWS_EMAIL_CONFIG": str(cfg_path)}, clear=True), \
              mock.patch("builtins.input", lambda _: next(answers)), \
              mock.patch("getpass.getpass", lambda _: "app-pass-123"), \
@@ -506,6 +507,89 @@ class CliTests(unittest.TestCase):
             code, out, _ = self.run_cli("email", "show")
             self.assertIn("(saved)", out)
             self.assertNotIn("app-pass-123", out)
+
+    def _fake_buttondown(self, calls, fail_status=None):
+        """Stand-in for urllib.request.urlopen that records Buttondown API calls."""
+        import io as _io
+        import urllib.error
+
+        class Resp(_io.BytesIO):
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+        import urllib.request
+        real_urlopen = urllib.request.urlopen
+
+        def urlopen(req, timeout=None):
+            if not getattr(req, "full_url", str(req)).startswith("https://api.buttondown.com/"):
+                return real_urlopen(req, timeout=timeout)  # e.g. the local fixture feed
+            calls.append(req)
+            if fail_status:
+                raise urllib.error.HTTPError(req.full_url, fail_status, "err", {}, _io.BytesIO(b'{"detail":"API access requires a paid plan"}'))
+            if req.full_url.endswith("/subscribers?page_size=1"):
+                return Resp(b'{"count": 3, "results": []}')
+            return Resp(b'{"id": "em_1", "absolute_url": "https://buttondown.com/acme/archive/briefing"}')
+        return urlopen
+
+    def test_email_setup_buttondown(self):
+        from unittest import mock
+        cfg_path, site_path = self.tmp / "email.json", self.tmp / "site.json"
+        site_path.write_text(json.dumps({"_comment": "keep me", "subscribe_url": "", "subscribe_email": "old@x.com",
+                                         "briefing_title": "Daily"}))
+        answers = iter(["1", "acme", "y"])  # Buttondown, username, connect sign-up box
+        calls = []
+        with mock.patch.dict("os.environ", {"SECNEWS_EMAIL_CONFIG": str(cfg_path)}, clear=True), \
+             mock.patch("builtins.input", lambda _: next(answers)), \
+             mock.patch("getpass.getpass", lambda _: "bd-key-123"), \
+             mock.patch("urllib.request.urlopen", self._fake_buttondown(calls)):
+            code, out, err = self.run_cli("--site-file", str(site_path), "email", "setup")
+        self.assertEqual(code, 0, err)
+        self.assertIn("You have 3 subscribers", out)
+        self.assertEqual(calls[0].get_header("Authorization"), "Token bd-key-123")
+        cfg = json.loads(cfg_path.read_text())
+        self.assertEqual((cfg["method"], cfg["buttondown_username"]), ("buttondown", "acme"))
+        site = json.loads(site_path.read_text())
+        self.assertEqual(site["subscribe_url"], "https://buttondown.com/api/emails/embed-subscribe/acme")
+        self.assertEqual((site["subscribe_email"], site["_comment"]), ("", "keep me"))
+
+    def test_briefing_send_via_buttondown(self):
+        from unittest import mock
+        self._recent_feed()
+        calls = []
+        with mock.patch.dict("os.environ", {"SECNEWS_BUTTONDOWN_API_KEY": "k", "SECNEWS_EMAIL_CONFIG": str(self.tmp / "none.json")}, clear=True), \
+             mock.patch("urllib.request.urlopen", self._fake_buttondown(calls)), mock.patch("smtplib.SMTP") as smtp:
+            code, _, err = self.run_cli("briefing", "--send")
+            self.assertEqual(code, 0, err)
+            smtp.assert_not_called()  # no mailbox involved
+            sent = json.loads(calls[-1].data)
+            self.assertEqual(calls[-1].full_url, "https://api.buttondown.com/v1/emails")
+            self.assertEqual(sent["status"], "about_to_send")
+            self.assertEqual(calls[-1].get_header("X-buttondown-live-dangerously"), "true")
+            self.assertIn("Ransomware hits hospital chain", sent["body"])
+            self.assertNotIn("<html", sent["body"])  # Buttondown wraps it with its own header/footer/unsubscribe
+            self.assertIn("Sent the briefing to your Buttondown subscribers", err)
+
+            code, _, err = self.run_cli("briefing", "--draft")
+            self.assertEqual(code, 0, err)
+            self.assertEqual(json.loads(calls[-1].data)["status"], "draft")
+            self.assertIsNone(calls[-1].get_header("X-buttondown-live-dangerously"))
+
+    def test_buttondown_without_api_access_suggests_paste(self):
+        from unittest import mock
+        self._recent_feed()
+        with mock.patch.dict("os.environ", {"SECNEWS_BUTTONDOWN_API_KEY": "k"}, clear=True), \
+             mock.patch("urllib.request.urlopen", self._fake_buttondown([], fail_status=403)):
+            code, _, err = self.run_cli("briefing", "--send")
+        self.assertEqual(code, 1)
+        self.assertIn("--paste", err)
+        out = self.tmp / "paste.html"
+        code, stdout, _ = self.run_cli("briefing", "--paste", "-o", str(out))
+        self.assertEqual(code, 0)
+        self.assertIn("Ransomware hits hospital chain", out.read_text())
+        self.assertIn("paste the contents", stdout)
 
     def test_email_test_reports_server_errors(self):
         import smtplib

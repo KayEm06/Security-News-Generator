@@ -1,8 +1,10 @@
-# Emails the daily briefing every morning.
-# Needs these repository secrets (Settings > Secrets and variables > Actions):
-#   SECNEWS_SMTP_HOST, SECNEWS_SMTP_USER, SECNEWS_SMTP_PASSWORD   (required)
-#   SECNEWS_SMTP_FROM, SECNEWS_SMTP_PORT, SECNEWS_SMTP_SECURITY   (optional)
-#   SECNEWS_SUBSCRIBERS   one email address per line (kept secret so the list isn't in the repo)
+# Sends the daily briefing every morning. Add repository secrets (Settings > Secrets and variables > Actions)
+# for ONE of these:
+#   Buttondown (newsletter service):  SECNEWS_BUTTONDOWN_API_KEY
+#     Buttondown sends to everyone on your Buttondown list; no subscriber secret needed.
+#   Email account (SMTP):  SECNEWS_SMTP_HOST, SECNEWS_SMTP_USER, SECNEWS_SMTP_PASSWORD
+#     (optional SECNEWS_SMTP_FROM, SECNEWS_SMTP_PORT, SECNEWS_SMTP_SECURITY)
+#     plus SECNEWS_SUBSCRIBERS: one email address per line (kept secret so the list isn't in the repo)
 # Scheduled runs only start once this file is on the default branch (main).
 name: Daily briefing email
 
@@ -38,6 +40,7 @@ jobs:
 
       - name: Send the briefing
         env:
+          SECNEWS_BUTTONDOWN_API_KEY: ${{ secrets.SECNEWS_BUTTONDOWN_API_KEY }}
           SECNEWS_SMTP_HOST: ${{ secrets.SECNEWS_SMTP_HOST }}
           SECNEWS_SMTP_PORT: ${{ secrets.SECNEWS_SMTP_PORT }}
           SECNEWS_SMTP_USER: ${{ secrets.SECNEWS_SMTP_USER }}
