@@ -719,6 +719,15 @@ class CliTests(unittest.TestCase):
         self.assertIn("SmtpClientAuthentication is disabled", err)
         self.assertIn("Authenticated SMTP", err)  # provider tip
 
+    def test_briefing_send_explains_missing_local_setup(self):
+        from unittest import mock
+        self._recent_feed()
+        with mock.patch.dict("os.environ", {"SECNEWS_EMAIL_CONFIG": str(self.tmp / "none.json")}, clear=True):
+            code, _, err = self.run_cli("briefing", "--send")
+        self.assertEqual(code, 2)
+        self.assertIn("isn't set up on this computer", err)
+        self.assertIn("GitHub secret", err)
+
     def test_subscribers(self):
         subs = self.tmp / "s.txt"
         self.run_cli("subscribers", "add", "x@example.com", "y@example.com", "--subscribers", str(subs))
