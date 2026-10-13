@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -412,6 +413,11 @@ def cmd_briefing(args) -> int:
 
     recipients = [e.strip().lower() for e in args.to] if args.to else bf.load_subscribers(
         Path(args.subscribers) if args.subscribers else bf.subscribers_path())
+    if not args.to and not bf.load_email_config() and not os.environ.get("SECNEWS_SMTP_HOST"):
+        print("error: sending isn't set up on this computer. Run 'secnews email setup' and choose Buttondown.\n"
+              "(A Buttondown key saved as a GitHub secret is only used by the GitHub workflow, not on your computer.)",
+              file=sys.stderr)
+        return 2
     if not recipients:
         print("error: nobody to send to. Add people with 'secnews subscribers add EMAIL' or use --to.", file=sys.stderr)
         return 2
