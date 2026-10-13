@@ -629,38 +629,67 @@ class CliTests(unittest.TestCase):
         log = load_sent(path)
         self.assertEqual((log["last_sent_day"], list(log["links"])), ("2026-10-11", ["https://a"]))
 
-    def test_briefing_scheduled_for_9am_and_once_per_day(self):
-        from unittest import mock
+    def test_decide_delivery(self):
         from zoneinfo import ZoneInfo
+        from secnews.briefing import decide_delivery
+        uk = ZoneInfo("Europe/London")
+        at = (9, 0)
+
+        def utc(text):  # e.g. "2026-10-13 07:17" in UTC
+            return datetime.fromisoformat(text).replace(tzinfo=timezone.utc)
+        empty = {}
+        # Evening run (20:17 UK): prepare tomorrow's 09:00 briefing.
+        d = decide_delivery(utc("2026-10-13 19:17"), uk, at, {"days": {"2026-10-13": {"status": "scheduled", "id": "e1"}}})
+        self.assertEqual((d.action, d.day), ("schedule", "2026-10-14"))
+        self.assertEqual(d.send_at.astimezone(uk).strftime("%Y-%m-%d %H:%M"), "2026-10-14 09:00")
+        # Next morning before 08:50: refresh the scheduled one with overnight news (no second email).
+        log = {"days": {"2026-10-14": {"status": "scheduled", "id": "e2"}}}
+        d = decide_delivery(utc("2026-10-14 06:17"), uk, at, log)
+        self.assertEqual((d.action, d.day, d.email_id), ("refresh", "2026-10-14", "e2"))
+        # Too close to 09:00 to safely edit it: work on tomorrow's instead.
+        d = decide_delivery(utc("2026-10-14 07:55"), uk, at, log)
+        self.assertEqual((d.action, d.day), ("schedule", "2026-10-15"))
+        # Nothing was scheduled and it's already 11:00: send today's straight away, once.
+        d = decide_delivery(utc("2026-10-14 10:00"), uk, at, empty)
+        self.assertEqual((d.action, d.day), ("send_now", "2026-10-14"))
+        d = decide_delivery(utc("2026-10-14 10:30"), uk, at, {"days": {"2026-10-14": {"status": "sent"}}})
+        self.assertEqual((d.action, d.day), ("schedule", "2026-10-15"))
+        # Winter time: 09:00 UK = 09:00 UTC.
+        d = decide_delivery(utc("2026-12-01 20:00"), uk, at, empty)
+        self.assertEqual(d.send_at.astimezone(timezone.utc).strftime("%H:%M"), "09:00")
+        # Already sent (e.g. a manual send in the morning) and before 08:50: nothing to do for today.
+        d = decide_delivery(utc("2026-10-14 06:00"), uk, at, {"days": {"2026-10-14": {"status": "sent"}}})
+        self.assertEqual(d.action, "skip")
+
+    def test_briefing_schedules_then_refreshes(self):
+        from unittest import mock
         self._recent_feed()
-        london = ZoneInfo("Europe/London")
-        local_now = datetime.now(london)
         calls = []
         env = {"SECNEWS_BUTTONDOWN_API_KEY": "k", "SECNEWS_EMAIL_CONFIG": str(self.tmp / "none.json")}
-        with mock.patch.dict("os.environ", env, clear=True), \
+        args = ("briefing", "--focus", "all", "--send", "--at", "09:00", "--timezone", "Europe/London")
+        evening = datetime.now(timezone.utc).replace(hour=19, minute=17)
+
+        class EveningClock(datetime):  # run as if it's the 19:17 UTC job
+            @classmethod
+            def now(cls, tz=None):
+                return evening if tz else evening.replace(tzinfo=None)
+        with mock.patch.dict("os.environ", env, clear=True), mock.patch("secnews.cli.datetime", EveningClock), \
              mock.patch("urllib.request.urlopen", self._fake_buttondown(calls)):
-            if local_now.hour < 22:  # schedule for an hour from now (same day)
-                at = (local_now + timedelta(hours=1)).strftime("%H:%M")
-                code, _, err = self.run_cli("briefing", "--focus", "all", "--send", "--at", at, "--timezone", "Europe/London",
-                                            "--once-per-day")
-                self.assertEqual(code, 0, err)
-                payload = json.loads(calls[-1].data)
-                self.assertEqual(payload["status"], "scheduled")
-                when = datetime.fromisoformat(payload["publish_date"]).astimezone(london)
-                self.assertEqual(when.strftime("%H:%M"), at)
-                self.assertIn("scheduled for", err)
-                # A second run the same day (e.g. the backup schedule) does nothing.
-                n = len(calls)
-                code, _, err = self.run_cli("briefing", "--focus", "all", "--send", "--at", at, "--timezone", "Europe/London",
-                                            "--once-per-day")
-                self.assertEqual((code, len(calls)), (0, n))
-                self.assertIn("already gone out", err)
-            if local_now.hour >= 1:  # the send time has already passed: deliver immediately
-                past = (local_now - timedelta(hours=1)).strftime("%H:%M")
-                code, _, err = self.run_cli("briefing", "--focus", "all", "--send", "--at", past, "--timezone", "Europe/London",
-                                            "--sent-log", str(self.tmp / "late.json"))
-                self.assertEqual(code, 0, err)
-                self.assertEqual(json.loads(calls[-1].data)["status"], "about_to_send")
+            code, _, err = self.run_cli(*args)
+            self.assertEqual(code, 0, err)
+            first = calls[-1]
+            self.assertEqual((first.get_method(), json.loads(first.data)["status"]), ("POST", "scheduled"))
+            self.assertIn("scheduled in Buttondown for 09:00", err)
+            # A later run (e.g. the backup) updates that email rather than creating another.
+            code, _, err = self.run_cli(*args)
+            self.assertEqual(code, 0, err)
+            second = calls[-1]
+            self.assertEqual((second.get_method(), second.full_url), ("PATCH", "https://api.buttondown.com/v1/emails/em_1"))
+            self.assertIn("Refreshed the briefing scheduled for 09:00", err)
+            self.assertEqual(sum(1 for c in calls if c.get_method() == "POST"), 1)
+        log = json.loads((self.tmp / "sent.json").read_text())
+        (day, entry), = log["days"].items()
+        self.assertEqual((entry["status"], entry["id"]), ("scheduled", "em_1"))
 
     def test_buttondown_without_api_access_suggests_paste(self):
         from unittest import mock

@@ -76,7 +76,13 @@ All of this is set in `secnews/data/site.json`:
 
 For a one-off, `--focus ransomware,vulnerabilities` or `--focus all` overrides the setting.
 
-**Sending at a set time:** `--at 09:00` delivers at 09:00 in `briefing_timezone`. With Buttondown, the briefing is handed over in advance and Buttondown sends it at exactly that time. With an email account, the command waits until then, starting no more than 3 hours early. If a run starts after the time has passed, it sends straight away. `--once-per-day` makes extra runs on the same day do nothing. On Windows, run `pip install tzdata` once so time zones work.
+**Sending at a set time:** `--at 09:00` delivers at 09:00 in `briefing_timezone`.
+
+- **With Buttondown,** each run decides what to do. Before 08:50 it prepares that day's briefing, or refreshes it if it's already scheduled. After 09:00 it prepares the next day's. Buttondown holds the email and sends it at exactly 09:00, so the job can run whenever it likes, even the evening before.
+- **If a day's briefing was never scheduled,** the first run after 09:00 sends it straight away, up to 8 hours late.
+- **With an email account,** the command waits until 09:00 if it's less than 3 hours away, and otherwise does nothing that run. `--once-per-day` stops repeat sends.
+
+On Windows, run `pip install tzdata` once so time zones work.
 
 There are two ways to send it. Run `python3 -m secnews email setup` and pick one.
 
@@ -142,7 +148,7 @@ The repository includes two workflows. Scheduled runs only start once they're on
 | Workflow | When | What it does |
 |---|---|---|
 | **Update news site** (`update-site.yml`) | every 4 hours | fetches all sources, keeps the archive between runs, builds the site, and keeps a downloadable copy (*Actions › run › Artifacts › news-site*) |
-| **Daily briefing email** (`daily-briefing.yml`) | delivered at 09:00 UK time every day | builds the IoT & ICS/OT briefing early (07:17 UTC, with a backup run at 08:17) and has Buttondown send it at exactly 09:00, all year round. With an email account, the job waits until 09:00, which uses about 60–100 extra Actions minutes a day |
+| **Daily briefing email** (`daily-briefing.yml`) | delivered at 09:00 UK time every day | GitHub often starts scheduled jobs hours late or skips them, so this doesn't rely on it being on time. Runs from the evening onwards prepare the next day's briefing and hand it to Buttondown, scheduled for 09:00. Early-morning runs refresh it with overnight news. If nothing was scheduled, the first run after 09:00 sends that day's late rather than skipping it. Buttondown only ever gets one email a day |
 
 Set-up, in the repository on GitHub:
 
