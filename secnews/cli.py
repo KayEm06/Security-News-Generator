@@ -306,9 +306,31 @@ def cmd_briefing(args) -> int:
         _log(args, f"Forgot {n} stories sent on {args.forget_sent}; they can go out again.")
         return 0
     log = bf.load_sent(sent_log)
-    if args.once_per_day and (args.send or args.draft) and log.get("last_sent_day") == local_today:
+
+    at = None
+    if args.at:
+        try:
+            at = tuple(int(x) for x in args.at.split(":"))
+            if len(at) != 2 or not (0 <= at[0] < 24 and 0 <= at[1] < 60):
+                raise ValueError
+        except ValueError:
+            print(f"error: --at expects HH:MM, got '{args.at}'", file=sys.stderr)
+            return 2
+
+    # With Buttondown and --at, each run works out whether to prepare, refresh or (if late) send a briefing,
+    # so delivery stays on time however unpunctual the scheduler is. See briefing.decide_delivery.
+    bd = bf.buttondown_settings() if args.send and not args.to else None
+    plan = None
+    if bd and at:
+        plan = bf.decide_delivery(now, tz, at, log)
+        if plan.action == "skip":
+            _log(args, f"Nothing to do: {plan.reason}.")
+            return 0
+    elif args.once_per_day and (args.send or args.draft) and log.get("last_sent_day") == local_today:
         _log(args, f"Today's briefing ({local_today}) has already gone out; nothing to do.")
         return 0
+    day = plan.day if plan else local_today
+    issue_date = datetime.fromisoformat(day).replace(hour=12, tzinfo=tz)  # the date shown on the briefing
 
     articles, everything, _, archive_path = _gather(args, taxonomy)
     sections = bf.plan_briefing(
@@ -316,16 +338,16 @@ def cmd_briefing(args) -> int:
         min_focus=int(site.get("briefing_min_focus_stories") or 5), max_focus=limit,
         catchup_days=int(site.get("briefing_catchup_days") or 14),
         general=int(site.get("briefing_general_stories", 3)) if focus else 0,
-        limit=limit, already_sent=set(log.get("links", {})))
+        limit=limit, already_sent={k for k, v in log.get("links", {}).items() if v != day})
     stories = bf.all_stories(sections)
     _enrich_and_archive(args, stories, everything, archive_path)
 
-    html_body = bf.build_html(sections, taxonomy, title, now)
-    subject = f"{title}: {now.astimezone(tz).strftime('%d %b %Y')}"
+    html_body = bf.build_html(sections, taxonomy, title, issue_date)
+    subject = f"{title}: {issue_date.strftime('%d %b %Y')}"
     if args.paste:
         out = Path(args.output or "briefing-for-buttondown.html")
         out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text(bf.build_html(sections, taxonomy, title, now, fragment=True), encoding="utf-8")
+        out.write_text(bf.build_html(sections, taxonomy, title, issue_date, fragment=True), encoding="utf-8")
         print(f"Saved {len(stories)} stories to {out}.\n"
               f"In Buttondown: New email > subject \"{subject}\" > switch the editor to HTML/Markdown mode >\n"
               f"paste the contents of {out} > Send.")
@@ -336,29 +358,44 @@ def cmd_briefing(args) -> int:
         _log(args, f"Wrote briefing with {len(stories)} stories to {args.output}")
     if not (args.send or args.draft):
         if not args.output:
-            sys.stdout.write(bf.build_text(sections, title, now) + "\n")
+            sys.stdout.write(bf.build_text(sections, title, issue_date) + "\n")
         return 0
     if not stories:
         _log(args, "No stories to send, so nothing was sent.")
         return 0
 
-    # --at HH:MM: deliver at that local time. Runs that start late send straight away.
-    send_at = None
-    if args.at:
+    links = [a.link for a in stories]
+    if plan:
+        body = bf.build_html(sections, taxonomy, title, issue_date, fragment=True)
+        when = plan.send_at.strftime("%H:%M %Z on %a %d %b") if plan.send_at else ""
         try:
-            hh, mm = (int(x) for x in args.at.split(":"))
-            send_at = datetime.combine(now.astimezone(tz).date(), datetime.min.time(), tz).replace(hour=hh, minute=mm)
-        except ValueError:
-            print(f"error: --at expects HH:MM, got '{args.at}'", file=sys.stderr)
-            return 2
-        if send_at <= now + timedelta(minutes=2):
-            send_at = None
+            if plan.action == "refresh":
+                bf.buttondown_update(bd["api_key"], plan.email_id, subject, body)
+                bf.record_sent(sent_log, links, day, replace_day=True)
+                _log(args, f"Refreshed the briefing scheduled for {when}: now {len(stories)} stories.")
+            elif plan.action == "schedule":
+                result = bf.buttondown_send(bd["api_key"], subject, body, send_at=plan.send_at)
+                bf.record_sent(sent_log, links, day, replace_day=True, scheduled={
+                    "status": "scheduled", "id": str(result.get("id", "")), "at": plan.send_at.isoformat()})
+                _log(args, f"Briefing with {len(stories)} stories scheduled in Buttondown for {when}.")
+            else:  # send_now: today's briefing never went out and the delivery time has passed
+                result = bf.buttondown_send(bd["api_key"], subject, body)
+                bf.record_sent(sent_log, links, day, replace_day=True, scheduled={"status": "sent"})
+                _log(args, f"Today's briefing was late, so it was sent now ({len(stories)} stories).")
+        except bf.ButtondownError as e:
+            if plan.action == "refresh":
+                # The earlier version is still scheduled, so subscribers get that one; don't risk a duplicate.
+                _log(args, f"Couldn't refresh the scheduled briefing ({e}); the earlier version will go out at {when}.")
+                return 0
+            print(f"error: {e}", file=sys.stderr)
+            return 1
+        return 0
 
-    bd = bf.buttondown_settings()
-    if bd and not args.to:
+    if bd or (args.draft and bf.buttondown_settings() and not args.to):
+        bd = bd or bf.buttondown_settings()
         try:
-            result = bf.buttondown_send(bd["api_key"], subject, bf.build_html(sections, taxonomy, title, now, fragment=True),
-                                        draft=args.draft, send_at=send_at)
+            result = bf.buttondown_send(bd["api_key"], subject, bf.build_html(sections, taxonomy, title, issue_date, fragment=True),
+                                        draft=args.draft)
         except bf.ButtondownError as e:
             print(f"error: {e}", file=sys.stderr)
             return 1
@@ -366,9 +403,8 @@ def cmd_briefing(args) -> int:
         if args.draft:
             _log(args, f"Created a draft: {where}")
             return 0
-        when = f"scheduled for {send_at.strftime('%H:%M %Z')}" if send_at else "sent"
-        _log(args, f"Briefing with {len(stories)} stories {when} to your Buttondown subscribers: {where}")
-        bf.record_sent(sent_log, [a.link for a in stories], local_today)
+        _log(args, f"Briefing with {len(stories)} stories sent to your Buttondown subscribers: {where}")
+        bf.record_sent(sent_log, links, day, scheduled={"status": "sent"})
         return 0
     if args.draft:
         print("error: --draft needs Buttondown. Run 'secnews email setup' and choose Buttondown.", file=sys.stderr)
@@ -384,19 +420,23 @@ def cmd_briefing(args) -> int:
     except bf.SmtpConfigError as e:
         print(f"error: email isn't set up: {e}.", file=sys.stderr)
         return 2
-    if send_at:
+    if at:
+        # Email accounts can't hold a message for later, so wait until the delivery time (if it's soon).
+        send_at = datetime.combine(now.astimezone(tz).date(), datetime.min.time(), tz).replace(hour=at[0], minute=at[1])
         wait = (send_at - datetime.now(timezone.utc)).total_seconds()
         if wait > 3 * 3600:
-            print(f"error: {args.at} is more than 3 hours away; start the job closer to the send time.", file=sys.stderr)
-            return 2
-        _log(args, f"Waiting until {send_at.strftime('%H:%M %Z')} to send…")
-        time.sleep(max(0, wait))
-    failed = bf.send(recipients, subject, html_body, bf.build_text(sections, title, now), settings)
+            _log(args, f"{args.at} is more than 3 hours away; an email account can't schedule that far ahead, so "
+                       "nothing was sent this run.")
+            return 0
+        if wait > 0:
+            _log(args, f"Waiting until {send_at.strftime('%H:%M %Z')} to send…")
+            time.sleep(wait)
+    failed = bf.send(recipients, subject, html_body, bf.build_text(sections, title, issue_date), settings)
     _log(args, f"Sent briefing to {len(recipients) - len(failed)} of {len(recipients)} subscribers")
     for addr in failed:
         print(f"  ✗ could not send to {addr}", file=sys.stderr)
     if len(failed) < len(recipients):
-        bf.record_sent(sent_log, [a.link for a in stories], local_today)
+        bf.record_sent(sent_log, links, day, scheduled={"status": "sent"})
     return 1 if failed and len(failed) == len(recipients) else 0
 
 

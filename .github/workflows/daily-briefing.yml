@@ -10,12 +10,17 @@ name: Daily briefing email
 
 on:
   schedule:
-    # Delivered at 09:00 UK time every day. GitHub schedules are in UTC and ignore summer time, so the
-    # job runs early (08:17 UK in summer, 07:17 in winter), builds the briefing and has Buttondown send it
-    # at exactly 09:00 (an email account waits until 09:00 instead). The second run is a backup in case
-    # GitHub skips or badly delays the first; --once-per-day stops it sending twice.
-    - cron: "17 7 * * *"
-    - cron: "17 8 * * *"
+    # Delivered at 09:00 UK time every day, even though GitHub often starts scheduled jobs hours late
+    # (or skips them). Each run decides for itself (see decide_delivery in secnews/briefing.py):
+    #  - evening/overnight runs prepare TOMORROW's briefing and hand it to Buttondown, scheduled for 09:00
+    #  - early-morning runs refresh that scheduled email with overnight news (until 08:50)
+    #  - if nothing was scheduled and 09:00 has passed, a run sends today's straight away
+    # Buttondown only ever gets one email per day. Times below are UTC (UK = UTC+1 in summer).
+    - cron: "17 19 * * *" # 20:17 UK summer / 19:17 winter: prepare tomorrow's
+    - cron: "17 22 * * *" # backup
+    - cron: "17 2 * * *" # backup / overnight refresh
+    - cron: "17 5 * * *" # morning refresh
+    - cron: "17 7 * * *" # last refresh (08:17 UK summer / 07:17 winter)
   workflow_dispatch:
     inputs:
       forget_sent_day:

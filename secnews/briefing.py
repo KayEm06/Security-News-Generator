@@ -122,15 +122,64 @@ def load_sent(path: Path) -> dict:
         return {}
 
 
-def record_sent(path: Path, links: list[str], day: str, keep_days: int = 60) -> None:
-    """Remember what went out (so catch-up never repeats a story) and on which day."""
+@dataclass
+class Delivery:
+    action: str  # "schedule" | "refresh" | "send_now" | "skip"
+    day: str  # the briefing's date (local), YYYY-MM-DD
+    send_at: datetime | None = None
+    email_id: str = ""
+    reason: str = ""
+
+
+def decide_delivery(now: datetime, tz, at: tuple[int, int], log: dict,
+                    refresh_until: timedelta = timedelta(minutes=10), late_for: timedelta = timedelta(hours=8)) -> Delivery:
+    """Work out what a run should do so the briefing arrives at ``at`` local time every day, however late
+    or early the scheduler starts the job:
+
+    - before (delivery - refresh_until): prepare today's briefing, or refresh it if already scheduled
+    - after the delivery time, if today's never went out: send it now (up to ``late_for`` late)
+    - otherwise: prepare tomorrow's briefing (or refresh it), which the newsletter service holds until then
+    """
+    from datetime import time as dtime
+    days = log.get("days", {})
+    local_today = now.astimezone(tz).date()
+
+    def deliver(d):
+        return datetime.combine(d, dtime(at[0], at[1]), tzinfo=tz)
+
+    if now < deliver(local_today) - refresh_until:
+        target = local_today
+    elif local_today.isoformat() not in days and now < deliver(local_today) + late_for:
+        return Delivery("send_now", local_today.isoformat())
+    else:
+        target = local_today + timedelta(days=1)
+    day, when = target.isoformat(), deliver(target)
+    entry = days.get(day)
+    if entry and entry.get("status") == "scheduled" and entry.get("id"):
+        return Delivery("refresh", day, when, entry["id"])
+    if entry:
+        return Delivery("skip", day, reason=f"the briefing for {day} has already gone out")
+    return Delivery("schedule", day, when)
+
+
+def record_sent(path: Path, links: list[str], day: str, keep_days: int = 60, *, replace_day: bool = False,
+                scheduled: dict | None = None) -> None:
+    """Remember what went out (so catch-up never repeats a story) and for which day.
+
+    ``replace_day`` swaps that day's stories for ``links`` (used when a scheduled briefing is refreshed).
+    ``scheduled`` stores how the day's briefing was handed to the newsletter service, e.g.
+    ``{"id": "...", "at": "2026-10-14T09:00:00+01:00"}``, so later runs update it instead of sending again.
+    """
     import json
     log = load_sent(path)
-    sent = log.get("links", {})
+    sent = {k: v for k, v in log.get("links", {}).items() if not (replace_day and v == day)}
     for link in links:
         sent[link] = day
     cutoff = (datetime.fromisoformat(day) - timedelta(days=keep_days)).date().isoformat()
-    log = {"last_sent_day": day, "links": {k: v for k, v in sent.items() if v >= cutoff}}
+    days = {d: v for d, v in log.get("days", {}).items() if d >= cutoff}
+    days[day] = {**days.get(day, {}), **(scheduled or {}), "stories": len(links)}
+    last = max(filter(None, [log.get("last_sent_day"), day]))
+    log = {"last_sent_day": last, "links": {k: v for k, v in sent.items() if v >= cutoff}, "days": days}
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(log, indent=1), encoding="utf-8")
 
@@ -145,8 +194,9 @@ def forget_sent(path: Path, day: str) -> int:
     sent = log.get("links", {})
     kept = {k: v for k, v in sent.items() if v != day}
     log["links"] = kept
+    log.get("days", {}).pop(day, None)
     if log.get("last_sent_day") == day:
-        log["last_sent_day"] = max(kept.values(), default=None)
+        log["last_sent_day"] = max(list(kept.values()) + list(log.get("days", {})), default=None)
     path.write_text(json.dumps(log, indent=1), encoding="utf-8")
     return len(sent) - len(kept)
 
@@ -297,6 +347,11 @@ def buttondown_check(api_key: str) -> int:
     """Validate the key; returns the current subscriber count."""
     data = _buttondown("GET", "/subscribers?page_size=1", api_key)
     return int(data.get("count", len(data.get("results", []))))
+
+
+def buttondown_update(api_key: str, email_id: str, subject: str, body_html: str) -> dict:
+    """Replace the content of an email that Buttondown hasn't sent yet (a scheduled briefing)."""
+    return _buttondown("PATCH", f"/emails/{email_id}", api_key, {"subject": subject, "body": body_html})
 
 
 def buttondown_send(api_key: str, subject: str, body_html: str, draft: bool = False,
