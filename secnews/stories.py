@@ -2,8 +2,9 @@
 
 Articles are compared on the words in their headline and summary, weighted by how rare each word is across
 everything collected, so shared names like "Ivanti" or "Salt Typhoon" count for much more than "hackers" or
-"vulnerability". A shared CVE ID links two articles outright, and articles naming different CVEs are never
-grouped. Groups only grow within a few days of their first article.
+"vulnerability". Words an outlet repeats in most of its own articles (promos, sign-offs) are ignored for it.
+A shared CVE ID links two articles outright, and articles naming different CVEs are never grouped. Groups only
+grow within a few days of their first article, and a story needs at least two different outlets.
 
 Nothing is merged or deleted: every article gets a ``story`` id (the link of the article chosen to represent
 its story) and the views decide how to show the group.
@@ -41,7 +42,7 @@ breach compromise access code remote execution zero day zero-day exploitation ac
 """.split())
 # Round-ups mention many stories at once, so they're never grouped with any one of them.
 ROUNDUP = re.compile(r"\b(recap|round-?up|week in review|weekly update|this week in|in other news|newsletter|digest|"
-                     r"news brief|stormcast|podcast)\b", re.I)
+                     r"news brief|stormcast|podcast|webinar)\b", re.I)
 _TOKEN = re.compile(r"[a-z0-9][a-z0-9.]*[a-z0-9]|[a-z0-9]")
 
 

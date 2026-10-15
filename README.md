@@ -18,7 +18,7 @@ Pulls the latest cybersecurity news from about 70 sources, tags each article by 
   - a daily briefing sign-up
   - filters for industry, location, source and time
 - **Filters:** category, industry, location, source, source type, date range, free text, CVE-only.
-- **Extras:** shows each article's picture and a proper summary (taken from the feed, or from the article page when the feed has no picture or only a one-liner), extracts CVE IDs, merges the same story when several outlets cover it ("3 outlets"), and reports feeds that fail without stopping the run.
+- **Extras:** shows each article's picture and a proper summary (taken from the feed, or from the article page when the feed has no picture or only a one-liner), extracts CVE IDs, groups coverage of the same event from different outlets into one story (see [Story grouping](#story-grouping)), and reports feeds that fail without stopping the run.
 - **Outputs:** interactive HTML, Markdown, JSON, CSV.
 
 ## Quick start
@@ -248,10 +248,23 @@ Key `fetch` options:
 | `--search TEXT`, `--cve-only` | Free-text match on title, summary and CVEs; keep only articles that mention a CVE |
 | `-o FILE` / `-f FORMAT` | Output file; the format comes from the extension (`.html .md .json .csv`). Without `-o`, Markdown goes to stdout |
 | `--input FILE.json` | Re-use a previous JSON snapshot instead of fetching |
-| `--no-merge` | Keep duplicate coverage of the same story as separate entries |
+| `--no-merge` | Keep duplicate coverage of the same story as separate entries (no merging or story grouping) |
 | `--no-page-lookup` | Skip opening article pages. By default the tool reads the page of any article whose feed gave no picture or only a one-line summary, and fills them in. This option is faster, but those articles keep the feed's short text and show a source-name block instead of a picture |
 
 Filters are combined with AND across types (category **and** industry **and** location) and with OR within one type (`-c fraud -c phishing` means either).
+
+## Story grouping
+
+Big news gets covered by dozens of outlets, so articles about the same event are grouped into one story. The site shows the story once, with an "N outlets" badge and a "N more articles on this story" list underneath. The Markdown digest lists the other outlets' links under "Also covered by". The daily briefing shows each story once and never repeats one that has already gone out.
+
+How it decides:
+
+- Articles are compared on the words in their headline and summary. Rare words such as product, company or group names ("Ivanti", "FortiBleed", "Salt Typhoon") count for much more than everyday security words ("hackers", "vulnerability").
+- Articles that mention the same CVE are always the same story, and articles naming different CVEs never are.
+- A story only takes in articles from within 3 days of its first one, and it needs at least two different outlets.
+- Round-ups ("Weekly recap", "In Other News", podcasts, webinars) never join a story.
+
+The settings are at the top of `secnews/stories.py`. `--no-merge` turns grouping off.
 
 ## Categories
 
@@ -267,7 +280,7 @@ Tagging is keyword-based. Keywords are matched as whole words or phrases, includ
 
 Both config files are plain JSON. Edit them in place (`secnews/data/`) or pass your own copies with `--sources-file` / `--categories-file`.
 
-- **`sources.json`**: add a feed with `{"name": "...", "url": "https://.../feed", "type": "news"}`. Add `"categories": ["vulnerabilities"]`, `"industries": ["healthcare"]` or `"locations": ["uk-ireland"]` to tag every article from that source, or `"enabled": false` to pause it. RSS 2.0, RSS 1.0/RDF and Atom are all supported, plus CISA's KEV JSON (`"format": "cisa-kev"`). Source types are `news`, `specialist`, `vendor-research`, `government` and `blog`. Ransomware.live, which lists every leak-site victim, is included but switched off because it's very high volume.
+- **`sources.json`**: add a feed with `{"name": "...", "url": "https://.../feed", "type": "news"}`. Add `"categories": ["vulnerabilities"]` or `"locations": ["uk-ireland"]` to tag every article from that source. `"industries": ["healthcare"]` marks a sector publication: its articles are tagged with that industry only when they mention it (its looser `sector_keywords` in `categories.json` count too), so HIPAA Journal's general news, such as a VPN flaw, isn't filed under healthcare. Use `"enabled": false` to pause a source. RSS 2.0, RSS 1.0/RDF and Atom are all supported, plus CISA's KEV JSON (`"format": "cisa-kev"`). Source types are `news`, `specialist`, `vendor-research`, `government` and `blog`. Ransomware.live, which lists every leak-site victim, is included but switched off because it's very high volume.
 - **`site.json`**: daily briefing sign-up settings, the email's title, and how many stories it includes.
 - **`categories.json`**: add keywords, new topics, industries or locations. For example, to filter by a single country, add a location entry with just that country's keywords. Each topic's `"color"` (a hex code such as `"#166534"`) sets its colour in the HTML report. Very dark colours are shown as solid tags with white text. Changes also apply to saved JSON snapshots, because `--input` re-tags articles on every run.
 
