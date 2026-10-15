@@ -12,6 +12,7 @@ from pathlib import Path
 
 from .config import Taxonomy
 from .models import Article
+from .stories import leads, outlets
 
 FORMATS = ("md", "html", "json", "csv")
 
@@ -37,11 +38,12 @@ def _md_escape(text: str) -> str:
 def to_markdown(articles: list[Article], taxonomy: Taxonomy, meta: dict) -> str:
     name = taxonomy.name_of
     sources = {a.source for a in articles}
+    stories = leads(articles)  # one entry per story; other outlets' articles listed under it
     out = [
         "# Cybersecurity News Digest",
         "",
         f"**Period:** {_period(meta)}  ",
-        f"**Articles:** {len(articles)} from {len(sources)} sources  ",
+        f"**Articles:** {len(articles)} from {len(sources)} sources, in {len(stories)} stories  ",
         f"**Generated:** {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}",
     ]
     if meta.get("filters"):
@@ -49,18 +51,18 @@ def to_markdown(articles: list[Article], taxonomy: Taxonomy, meta: dict) -> str:
     out.append("")
 
     by_topic: dict[str, list[Article]] = {}
-    for a in articles:
+    for a in stories:
         by_topic.setdefault(a.primary_topic, []).append(a)
     order = [t.id for t in taxonomy.topics if t.id in by_topic] + (["general"] if "general" in by_topic else [])
 
     if articles:
-        out += ["## At a glance", "", "| Category | Articles |", "|---|---:|"]
+        out += ["## At a glance", "", "| Category | Stories |", "|---|---:|"]
         out += [f"| [{name(t)}](#{_anchor(name(t))}) | {len(by_topic[t])} |" for t in order]
         out.append("")
-        widely = sorted((a for a in articles if a.also_reported_by), key=lambda a: -len(a.also_reported_by))[:10]
+        widely = sorted((a for a in stories if len(outlets(a)) > 1), key=lambda a: -len(outlets(a)))[:10]
         if widely:
             out += ["### Most widely reported", ""]
-            out += [f"- [{_md_escape(a.title)}]({a.link}) — {1 + len(a.also_reported_by)} outlets" for a in widely]
+            out += [f"- [{_md_escape(a.title)}]({a.link}) — {len(outlets(a))} outlets" for a in widely]
             out.append("")
         cve_counts = Counter(c for a in articles for c in a.cves)
         if cve_counts:
@@ -82,10 +84,14 @@ def to_markdown(articles: list[Article], taxonomy: Taxonomy, meta: dict) -> str:
             if a.locations:
                 bits.append("Locations: " + ", ".join(name(l) for l in a.locations))
             out.append(" · ".join(bits) + "  ")
-            if a.also_reported_by:
+            if a.related:
+                covered = ", ".join(f"[{_md_escape(r.source)}]({r.link})" for r in a.related)
+                out.append(f"Also covered by: {covered}  ")
+            elif a.also_reported_by:
                 out.append(f"Also reported by: {', '.join(a.also_reported_by)}  ")
-            if a.cves:
-                out.append(f"CVEs: {', '.join(a.cves)}  ")
+            cves = sorted({c for x in [a, *a.related] for c in x.cves})
+            if cves:
+                out.append(f"CVEs: {', '.join(cves)}  ")
             if a.summary:
                 out += ["", a.summary]
             out.append("")
@@ -112,7 +118,7 @@ def to_json(articles: list[Article], taxonomy: Taxonomy, meta: dict) -> str:
 def to_csv(articles: list[Article], taxonomy: Taxonomy, meta: dict) -> str:
     buf = io.StringIO()
     w = csv.writer(buf)
-    w.writerow(["published", "source", "title", "link", "primary_category", "categories", "industries", "locations", "cves", "also_reported_by", "summary"])
+    w.writerow(["published", "source", "title", "link", "primary_category", "categories", "industries", "locations", "cves", "also_reported_by", "story", "summary"])
     for a in articles:
         w.writerow([
             a.published.isoformat() if a.published else "",
@@ -125,6 +131,7 @@ def to_csv(articles: list[Article], taxonomy: Taxonomy, meta: dict) -> str:
             "; ".join(taxonomy.name_of(l) for l in a.locations),
             "; ".join(a.cves),
             "; ".join(a.also_reported_by),
+            a.story or a.link,
             a.summary,
         ])
     return buf.getvalue()

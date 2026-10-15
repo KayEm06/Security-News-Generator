@@ -224,7 +224,12 @@ class ClassifierTests(unittest.TestCase):
 
     def test_source_forced_industry(self):
         c = Classifier(TAX, [Source("HIPAA Journal", "x", industries=["healthcare"])])
-        self.assertEqual(c.classify(Article(title="Weekly roundup", link="x", source="HIPAA Journal")).industries, ["healthcare"])
+        hj = lambda title, summary="", tags=(): c.classify(  # noqa: E731
+            Article(title=title, link="x", source="HIPAA Journal", summary=summary, feed_tags=list(tags))).industries
+        # one mention is enough from a healthcare publication (normally a title hit or two mentions are needed)
+        self.assertEqual(hj("Data breach affects 40,000", "Patient names and records were exposed."), ["healthcare"])
+        # its general security news isn't healthcare, even with the site's own HIPAA category on it
+        self.assertEqual(hj("Ivanti Connect Secure zero-day exploited", "Apply the patch now.", ["HIPAA News"]), [])
 
     def test_publisher_tags_count_strongly(self):
         a = Classifier(TAX).classify(Article(title="Weekly roundup", link="x", source="T", feed_tags=["Healthcare"]))
@@ -284,6 +289,86 @@ class DedupFilterTests(unittest.TestCase):
         self.assertEqual(resolve_ids(["us"], TAX.locations, "location"), {"north-america"})
         with self.assertRaises(ValueError):
             resolve_ids(["nonsense"], TAX.topics, "topic")
+
+
+class StoryTests(unittest.TestCase):
+    T0 = datetime(2026, 10, 10, 9, tzinfo=timezone.utc)
+
+    def corpus(self):
+        def art(title, src, hours, summary="", cves=(), image=""):
+            return Article(title=title, link=f"https://{src.replace(' ', '').lower()}/{abs(hash(title))}", source=src,
+                           published=self.T0 + timedelta(hours=hours), summary=summary, cves=list(cves), image=image,
+                           source_type="news")
+        same = [
+            art("Salt Typhoon hackers breached more US telecom providers, FBI says", "The Record", 0,
+                "The FBI said the Chinese state-sponsored group Salt Typhoon compromised more telecommunications firms."),
+            art("FBI: Salt Typhoon breached at least nine US telecoms", "BleepingComputer", 4,
+                "Chinese state hackers known as Salt Typhoon breached telecommunications firms.", image="https://img/1.jpg"),
+            art("Salt Typhoon exploits Cisco routers to target telecom networks", "The Hacker News", 9,
+                "Chinese threat actor Salt Typhoon abused Cisco IOS XE flaws to breach telecom providers."),
+        ]
+        cve = [
+            art("Ivanti warns of exploited Connect Secure bug", "SecurityWeek", 1, "CVE-2026-1101 is exploited.", ["CVE-2026-1101"]),
+            art("CISA adds Ivanti flaw to KEV catalog", "CISA", 30, "Ivanti Connect Secure CVE-2026-1101.", ["CVE-2026-1101"]),
+        ]
+        other_cve = art("Ivanti EPMM flaw exploited", "SecurityWeek", 6, "CVE-2026-2002 in Endpoint Manager.", ["CVE-2026-2002"])
+        late = art("Salt Typhoon targets telecom firms again", "The Record", 24 * 9, "Salt Typhoon is back at telecoms.")
+        recap = art("Weekly recap: Salt Typhoon, Ivanti and more", "The Hacker News", 20, "Salt Typhoon telecom breaches, Ivanti.")
+        filler = [art(t, "Filler", h) for h, t in enumerate([
+            "Google fixes Chrome V8 type confusion", "Microsoft Teams adds URL protection", "Fortinet FortiWeb bug exploited",
+            "Startup raises funding for AI security", "Ransomware hits hospitals in Ohio", "Europol takes down botnet",
+            "Android banking trojan targets Europe", "UK sanctions GRU officers", "PyPI packages steal Discord tokens",
+            "NERC proposes new grid standards", "Solar inverter flaws found", "ESP32 secure boot glitched"])]
+        return same, cve, other_cve, late, recap, filler
+
+    def test_groups_same_event_only(self):
+        from secnews.stories import group_stories
+        same, cve, other_cve, late, recap, filler = self.corpus()
+        arts = same + cve + [other_cve, late, recap] + filler
+        group_stories(arts)
+        self.assertEqual(len({a.story for a in same}), 1)  # different headlines, same event
+        self.assertEqual(same[0].story, same[1].link)  # represented by the article with a picture
+        self.assertEqual(len({a.story for a in cve}), 1)  # shared CVE
+        self.assertEqual(other_cve.story, other_cve.link)  # different CVE from the same vendor
+        self.assertEqual(late.story, late.link)  # same actor, but over a week later: a new story
+        self.assertEqual(recap.story, recap.link)  # round-ups never join a story
+        self.assertTrue(all(a.story == a.link for a in filler))
+
+    def test_collapse_and_leads(self):
+        from secnews.stories import group_stories, latest, leads, outlets
+        same, cve, *_, filler = self.corpus()
+        group_stories(same + cve + filler)  # word rarity needs a realistic number of articles
+        stories = leads(same + cve)
+        self.assertEqual(len(stories), 2)
+        salt = next(s for s in stories if "Salt" in s.title)
+        self.assertEqual(len(salt.related), 2)
+        self.assertEqual(outlets(salt), ["BleepingComputer", "The Hacker News", "The Record"])
+        self.assertEqual(latest(salt), same[2].published)
+
+    def test_briefing_shows_each_story_once_and_never_again(self):
+        from secnews.briefing import build_html, plan_briefing
+        from secnews.stories import group_stories
+        same, cve, *_ , filler = self.corpus()
+        arts = same + cve + filler
+        group_stories(arts)
+        now = self.T0 + timedelta(hours=12)
+        secs = plan_briefing(arts, now, hours=24, limit=20)
+        shown = [a for s in secs for a in s.stories]
+        self.assertEqual(sum("Salt Typhoon" in a.title for a in shown), 1)
+        self.assertIn("also covered by", build_html(secs, TAX, "T", now))
+        sent = {x.link for a in shown for x in [a, *a.related]}
+        later = plan_briefing(arts, now + timedelta(hours=1), hours=24, limit=20, already_sent=sent)
+        self.assertFalse([a for s in later for a in s.stories])
+
+    def test_markdown_lists_other_coverage(self):
+        from secnews.render import to_markdown
+        from secnews.stories import group_stories
+        same, *_, filler = self.corpus()
+        group_stories(same + filler)
+        md = to_markdown(same, TAX, {})
+        self.assertEqual(md.count("### ["), 1)
+        self.assertIn("Also covered by: [", md)
+        self.assertIn("3 sources, in 1 stories", md)
 
 
 class ConfigTests(unittest.TestCase):

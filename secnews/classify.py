@@ -76,9 +76,14 @@ class Classifier:
             if forced not in topics:
                 topics.append(forced)
         art.topics = topics or ["general"]
-        industries = self._score(self._industries, art.title, body, tags, t.industry_min_score)
+        # A sector publication (e.g. HIPAA Journal for healthcare) also covers general news such as a VPN flaw.
+        # Its own category labels name its sector on every post, so they're ignored, and the sector only
+        # counts when the article itself mentions it at least once.
+        sector_source = bool(self._source_industries.get(art.source))
+        industries = self._score(self._industries, art.title, body, "" if sector_source else tags, t.industry_min_score)
+        evidence = set(self._score(self._industries, art.title, body, "", 1))
         for forced in self._source_industries.get(art.source, []):
-            if forced not in industries:
+            if forced not in industries and forced in evidence:
                 industries.append(forced)
         art.industries = industries
         locations = self._score(self._locations, art.title, body, tags, t.location_min_score)

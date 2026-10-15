@@ -12,6 +12,7 @@ from pathlib import Path
 from . import __version__
 from .archive import DEFAULT_KEEP_DAYS, default_path, load_archive, save_archive
 from .classify import Classifier, deduplicate, filter_articles, resolve_ids
+from .stories import group_stories
 from .config import load_site, load_sources, load_taxonomy
 from .feeds import enrich_from_pages, fetch_all, needs_page_lookup
 from .models import Article
@@ -191,6 +192,9 @@ def _gather(args, taxonomy) -> tuple[list[Article], list[Article], dict[str, str
     if not args.input:
         # With --no-merge, still drop exact repeats of the same link (e.g. archived + re-fetched).
         articles = deduplicate(articles, similarity=2.0 if args.no_merge else 0.7)
+        if not args.no_merge:
+            grouped = group_stories(articles)
+            _log(args, f"Grouped coverage of the same events into {grouped} multi-outlet stories")
     everything = articles
     if archive_path and args.type:
         allowed = {s.name for s in sources}
@@ -365,7 +369,8 @@ def cmd_briefing(args) -> int:
         _log(args, "No stories to send, so nothing was sent.")
         return 0
 
-    links = [a.link for a in stories]
+    # Every article on each story counts as sent, so later coverage of the same event isn't sent again.
+    links = [x.link for a in stories for x in [a, *getattr(a, "related", [])]]
     if plan:
         body = bf.build_html(sections, taxonomy, title, issue_date, fragment=True)
         when = plan.send_at.strftime("%H:%M %Z on %a %d %b") if plan.send_at else ""

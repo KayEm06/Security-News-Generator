@@ -15,6 +15,7 @@ from pathlib import Path
 
 from .config import Taxonomy
 from .models import Article
+from .stories import latest, leads, outlets
 
 MAROON, NAVY, MAROON_TEXT = "#5a0000", "#000d4c", "#6b0000"
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
@@ -48,10 +49,14 @@ def save_subscribers(path: Path, emails: list[str]) -> None:
 # --------------------------------------------------------------------------- building
 
 
+def _coverage(a: Article) -> int:
+    """How many outlets covered the story."""
+    return len(outlets(a))
+
+
 def pick_stories(articles: list[Article], limit: int) -> list[Article]:
     """Most-covered stories first (reported by several outlets), then newest."""
-    ranked = sorted(articles, key=lambda a: (len(a.also_reported_by), a.published or datetime.min.replace(tzinfo=timezone.utc)),
-                    reverse=True)
+    ranked = sorted(articles, key=lambda a: (_coverage(a), _ts(a)), reverse=True)
     return ranked[:limit]
 
 
@@ -80,14 +85,17 @@ def plan_briefing(articles: list[Article], now: datetime, *, hours: int = 24, fo
     """
     sent = already_sent or set()
     since = now - timedelta(hours=hours)
-    fresh = [a for a in articles if a.published and a.published >= since and a.link not in sent]
+    # One entry per story (outlets covering the same event are grouped), never one already in a briefing.
+    candidates = [a for a in leads(articles)
+                  if latest(a) and not any(x.link in sent for x in [a, *a.related])]
+    fresh = [a for a in candidates if latest(a) >= since]
     if not focus:
         return [Section("Today's top security stories", pick_stories(fresh, limit))]
 
     wanted = set(focus)
     is_focus = lambda a: bool(wanted & set(a.topics))  # noqa: E731
     # Primary-topic matches first, then most widely reported, then newest.
-    rank = lambda a: (a.primary_topic in wanted, len(a.also_reported_by), _ts(a))  # noqa: E731
+    rank = lambda a: (a.primary_topic in wanted, _coverage(a), latest(a))  # noqa: E731
     today = sorted((a for a in fresh if is_focus(a)), key=rank, reverse=True)[:max_focus]
     sections = [Section(f"Today in {focus_names}", today,
                         "" if today else f"No new {focus_names} stories in the last {hours} hours.",
@@ -96,9 +104,8 @@ def plan_briefing(articles: list[Article], now: datetime, *, hours: int = 24, fo
     if len(today) < min_focus:
         cutoff = now - timedelta(days=catchup_days)
         shown = {a.link for a in today}
-        older = [a for a in articles if a.published and cutoff <= a.published < since and is_focus(a)
-                 and a.link not in sent and a.link not in shown]
-        older.sort(key=_ts, reverse=True)
+        older = [a for a in candidates if cutoff <= latest(a) < since and is_focus(a) and a.link not in shown]
+        older.sort(key=latest, reverse=True)
         extra = older[: min_focus - len(today)]
         if extra:
             sections.append(Section("Catch up", extra, f"Recent {focus_names} stories you haven't had in a briefing yet.",
@@ -204,6 +211,23 @@ def forget_sent(path: Path, day: str) -> int:
 # --------------------------------------------------------------------------- rendering
 
 
+def _also_html(a: Article, show: int = 4) -> str:
+    """'Also covered by' with links to the other outlets' articles on the same story."""
+    e = html.escape
+    related = getattr(a, "related", [])
+    seen, links = {a.source}, []
+    for r in related:
+        if r.source not in seen:
+            seen.add(r.source)
+            links.append(f'<a href="{e(r.link)}" style="color:{NAVY}">{e(r.source)}</a>')
+    names = [e(n) for n in outlets(a) if n not in seen]  # merged near-identical copies (no separate link)
+    parts = links + names
+    if not parts:
+        return ""
+    more = f" and {len(parts) - show} more" if len(parts) > show else ""
+    return f" &middot; also covered by {', '.join(parts[:show])}{more}"
+
+
 def _story_rows(stories: list[Article], taxonomy: Taxonomy, catch_up: bool, label_topics: tuple[str, ...] = ()) -> str:
     e = html.escape
     color = {t.id: t.color or NAVY for t in taxonomy.topics}
@@ -212,7 +236,7 @@ def _story_rows(stories: list[Article], taxonomy: Taxonomy, catch_up: bool, labe
         topic = next((t for t in a.topics if t in label_topics), a.primary_topic)
         label = taxonomy.name_of(topic) if topic != "general" else "Security"
         when = f" &middot; {a.published.strftime('%d %b')}" if catch_up and a.published else ""
-        also = f" &middot; also reported by {e(', '.join(a.also_reported_by))}" if a.also_reported_by else ""
+        also = _also_html(a)
         cves = f"<br><span style=\"color:#b91c1c;font-size:12px\">{e(', '.join(a.cves[:6]))}</span>" if a.cves else ""
         img = (f'<td width="120" valign="top" style="padding:0 14px 0 0"><img src="{e(a.image)}" width="120" alt="" '
                f'style="display:block;width:120px;height:auto;border:0"></td>') if a.image.startswith("https://") else ""

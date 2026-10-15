@@ -19,6 +19,7 @@ class Article:
     locations: list[str] = field(default_factory=list)
     cves: list[str] = field(default_factory=list)
     also_reported_by: list[str] = field(default_factory=list)
+    story: str = ""  # link of the article representing the story this one belongs to (see stories.py)
 
     @property
     def primary_topic(self) -> str:
