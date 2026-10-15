@@ -52,6 +52,11 @@ jobs:
               print(f"\n=== {len(g)} articles")
               for a in g:
                   print(f"  {a.published:%d %b %H:%M} | {a.source[:22]:22} | {a.title[:110]}")
+          from secnews.stories import _house_words
+          hw = _house_words([a for a in arts if a.published])
+          print("\n\n### Outlet boilerplate words")
+          for src in sorted(hw, key=lambda s: -len(hw[s]))[:15]:
+              print(f"  {src}: {', '.join(sorted(hw[src])[:25])}")
           print("\n\n### HIPAA Journal tagging (last 10 days)")
           for a in arts:
               if a.source == "HIPAA Journal" and a.published >= recent:

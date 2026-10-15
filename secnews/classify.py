@@ -47,6 +47,7 @@ class Classifier:
         self.taxonomy = taxonomy
         self._topics = [(c, _compile(c.keywords)) for c in taxonomy.topics]
         self._industries = [(c, _compile(c.keywords)) for c in taxonomy.industries]
+        self._sector_evidence = [(c, _compile(c.keywords + c.sector_keywords)) for c in taxonomy.industries]
         self._locations = [(c, _compile(c.keywords)) for c in taxonomy.locations]
         self._source_topics = {s.name: s.categories for s in (sources or [])}
         self._source_locations = {s.name: s.locations for s in (sources or [])}
@@ -78,10 +79,10 @@ class Classifier:
         art.topics = topics or ["general"]
         # A sector publication (e.g. HIPAA Journal for healthcare) also covers general news such as a VPN flaw.
         # Its own category labels name its sector on every post, so they're ignored, and the sector only
-        # counts when the article itself mentions it at least once.
+        # counts when the article itself mentions it at least once (its sector_keywords count too).
         sector_source = bool(self._source_industries.get(art.source))
         industries = self._score(self._industries, art.title, body, "" if sector_source else tags, t.industry_min_score)
-        evidence = set(self._score(self._industries, art.title, body, "", 1))
+        evidence = set(self._score(self._sector_evidence, art.title, body, "", 1)) if sector_source else set()
         for forced in self._source_industries.get(art.source, []):
             if forced not in industries and forced in evidence:
                 industries.append(forced)

@@ -417,6 +417,11 @@
     {
       "id": "healthcare",
       "name": "Healthcare & Life Sciences",
+      "_sector_keywords": "Only used for healthcare publications such as HIPAA Journal: words that are reliable there but too vague in general news.",
+      "sector_keywords": ["health", "medicine", "medical center", "clinical", "physician", "physicians", "dental", "dentist",
+        "orthopedic", "orthopaedic", "laboratory", "laboratories", "pathology", "radiology", "cardiology", "oncology",
+        "pediatric", "surgery", "surgical", "nursing", "hospice", "behavioral health", "PHI", "ePHI", "OCR", "HHS",
+        "health plan", "Medicare", "Medicaid", "Cerner", "Epic"],
       "keywords": [
         "healthcare",
         "health care",

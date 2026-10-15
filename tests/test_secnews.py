@@ -230,6 +230,9 @@ class ClassifierTests(unittest.TestCase):
         self.assertEqual(hj("Data breach affects 40,000", "Patient names and records were exposed."), ["healthcare"])
         # its general security news isn't healthcare, even with the site's own HIPAA category on it
         self.assertEqual(hj("Ivanti Connect Secure zero-day exploited", "Apply the patch now.", ["HIPAA News"]), [])
+        # looser sector words count from a healthcare publication, but not from general news
+        self.assertIn("healthcare", hj("Bacon County Health Services Investigating Cyber Incident"))
+        self.assertNotIn("healthcare", tagged("Bacon County Health Services Investigating Cyber Incident").industries)
 
     def test_publisher_tags_count_strongly(self):
         a = Classifier(TAX).classify(Article(title="Weekly roundup", link="x", source="T", feed_tags=["Healthcare"]))
@@ -333,6 +336,29 @@ class StoryTests(unittest.TestCase):
         self.assertEqual(late.story, late.link)  # same actor, but over a week later: a new story
         self.assertEqual(recap.story, recap.link)  # round-ups never join a story
         self.assertTrue(all(a.story == a.link for a in filler))
+
+    def test_one_outlets_posts_never_form_a_story(self):
+        from secnews.stories import group_stories
+        *_, filler = self.corpus()
+        same_site = [Article(title=f"12 Best {x} Tools Compared (2026): Features & Pricing", link=f"https://gb/{x}",
+                             source="GBHackers", published=self.T0 + timedelta(hours=i)) for i, x in enumerate(["SAST", "IAST", "ASPM"])]
+        group_stories(same_site + filler)
+        self.assertTrue(all(a.story == a.link for a in same_site))
+
+    def test_outlet_boilerplate_is_ignored(self):
+        from secnews.stories import group_stories
+        *_, filler = self.corpus()
+        tail = " Related: SecurityWeek webinar on zero trust and cloud identity with Okta and Wiz."
+        week = [Article(title=t, link=f"https://sw/{i}", source="SecurityWeek", published=self.T0 + timedelta(hours=i),
+                        summary=t + "." + tail) for i, t in enumerate([
+            "Atlassian patches critical flaw in eight products", "Arizona court system breach hits a million people",
+            "Hadrian raises $40 million for offensive security", "Oracle Health breach tally climbs to 20 million",
+            "US seeks alleged Hafnium hacker with $10 million reward", "Android October updates patch 25 flaws",
+            "Georgia Power data breach hits 400,000 accounts", "Apple tightens macOS full disk access controls"])]
+        others = [Article(title="Okta outage hits Wiz customers", link="https://o/1", source="The Record",
+                          published=self.T0 + timedelta(hours=2), summary="Okta and Wiz confirm an outage.")]
+        group_stories(week + others + filler)
+        self.assertTrue(all(a.story == a.link for a in week + others))
 
     def test_collapse_and_leads(self):
         from secnews.stories import group_stories, latest, leads, outlets

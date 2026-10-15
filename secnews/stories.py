@@ -22,6 +22,7 @@ WINDOW = timedelta(days=3)
 THRESHOLD = 0.3  # similarity (0-1) needed to join a story
 MERGE_THRESHOLD = 0.3  # similarity needed to join two groups (see _merge_similar)
 NAME_SHARE = 0.015  # a headline word in at most this share of all articles (or 6) counts as a distinctive name
+HOUSE_SHARE = 0.15  # words in at least this share of one outlet's articles are its boilerplate (see _house_words)
 MAX_CVES = 5  # round-ups (Patch Tuesday, weekly recaps) list many CVEs; don't let them link stories
 
 _STOP = set("""
@@ -39,7 +40,8 @@ gang researcher research company firm user customer data system network organiza
 breach compromise access code remote execution zero day zero-day exploitation active actively wild release released
 """.split())
 # Round-ups mention many stories at once, so they're never grouped with any one of them.
-ROUNDUP = re.compile(r"\b(recap|round-?up|week in review|weekly update|this week in|newsletter|digest|news brief)\b", re.I)
+ROUNDUP = re.compile(r"\b(recap|round-?up|week in review|weekly update|this week in|in other news|newsletter|digest|"
+                     r"news brief|stormcast|podcast)\b", re.I)
 _TOKEN = re.compile(r"[a-z0-9][a-z0-9.]*[a-z0-9]|[a-z0-9]")
 
 
@@ -73,12 +75,32 @@ def tokens(text: str) -> set[str]:
     return out
 
 
-def _vector(a: Article, idf: dict[str, float]) -> tuple[dict[str, float], float]:
+def _words(a: Article, house: dict[str, set[str]]) -> tuple[set[str], set[str]]:
+    """(headline words, summary words), without the outlet's own boilerplate."""
+    skip = house.get(a.source, set())
+    return tokens(a.title) - skip, tokens(a.summary[:400]) - skip
+
+
+def _house_words(articles: list[Article]) -> dict[str, set[str]]:
+    """Words an outlet repeats across many of its own articles (its name, sign-offs, recurring phrases such as
+    "Related:" lines). They make that outlet's unrelated articles look alike, so they're ignored for it."""
+    counts: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+    totals: dict[str, int] = defaultdict(int)
+    for a in articles:
+        totals[a.source] += 1
+        for w in tokens(a.title) | tokens(a.summary[:400]):
+            counts[a.source][w] += 1
+    return {src: {w for w, c in words.items() if c >= 4 and c >= HOUSE_SHARE * totals[src]}
+            for src, words in counts.items() if totals[src] >= 8}
+
+
+def _vector(a: Article, idf: dict[str, float], house: dict[str, set[str]]) -> tuple[dict[str, float], float]:
     """Headline words count double; the summary's opening adds context."""
+    title, summary = _words(a, house)
     vec: dict[str, float] = {}
-    for w in tokens(a.summary[:400]):
+    for w in summary:
         vec[w] = idf.get(w, 0.0)
-    for w in tokens(a.title):
+    for w in title:
         vec[w] = 2 * idf.get(w, 0.0)
     return vec, math.sqrt(sum(v * v for v in vec.values())) or 1.0
 
@@ -106,9 +128,11 @@ def group_stories(articles: list[Article], threshold: float = THRESHOLD) -> int:
         a.story = a.link
     if not dated:
         return 0
+    house = _house_words(dated)
     df: dict[str, int] = defaultdict(int)
     for a in dated:
-        for w in tokens(a.title) | tokens(a.summary[:400]):
+        title, summary = _words(a, house)
+        for w in title | summary:
             df[w] += 1
     n = len(dated)
     # Words in almost every article ("security", "attack") are worth ~nothing; a name seen once or twice a lot.
@@ -123,9 +147,9 @@ def group_stories(articles: list[Article], threshold: float = THRESHOLD) -> int:
     for a in dated:
         if ROUNDUP.search(a.title):
             continue  # stays a story of its own
-        vec = _vector(a, idf)
+        vec = _vector(a, idf, house)
         cves = _cves(a)
-        title_words = tokens(a.title)
+        title_words = _words(a, house)[0]
         title_names = {w for w in title_words if df.get(w, 0) <= name_df}
         candidates = set()
         for w in title_words:
@@ -171,8 +195,8 @@ def group_stories(articles: list[Article], threshold: float = THRESHOLD) -> int:
 
     multi = 0
     for members in _merge_similar(groups):
-        if len(members) == 1:
-            continue
+        if len({m.source for m in members}) < 2:
+            continue  # only different outlets covering the same event make a story; one outlet's posts stay apart
         lead = max(members, key=_quality)
         for m in members:
             m.story = lead.link
