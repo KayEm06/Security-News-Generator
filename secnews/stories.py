@@ -117,88 +117,101 @@ def group_stories(articles: list[Article], threshold: float = THRESHOLD) -> int:
     # Names like "Typhoon" or "Jaguar" are rare overall; "Microsoft" or "Windows" are in too many stories to count.
     name_df = max(6, int(n * NAME_SHARE))
 
-    groups: list[dict] = []  # {"start", "members": [(article, vector)], "cves", "centroid": {word: weight}}
-    by_word: dict[str, list[int]] = defaultdict(list)
+    groups: list[dict] = []  # {"start", "members": [(article, vector, names)], "cves", "centroid", "norm", "words"}
+    by_word: dict[str, list[int]] = defaultdict(list)  # word -> groups whose headlines use it, oldest first
     by_cve: dict[str, list[int]] = defaultdict(list)
     for a in dated:
         if ROUNDUP.search(a.title):
             continue  # stays a story of its own
         vec = _vector(a, idf)
         cves = _cves(a)
-        title_names = {w for w in tokens(a.title) if df.get(w, 0) <= name_df}
-        candidates = {g for w in tokens(a.title) for g in by_word[w]}
-        candidates |= {g for c in cves for g in by_cve[c]}
+        title_words = tokens(a.title)
+        title_names = {w for w in title_words if df.get(w, 0) <= name_df}
+        candidates = set()
+        for w in title_words:
+            for gi in reversed(by_word[w]):  # most recently extended first
+                age = a.published - groups[gi]["start"]
+                if age > 2 * WINDOW:  # a group only grows for WINDOW, so everything before this is older still
+                    break
+                if age <= WINDOW:
+                    candidates.add(gi)
+        candidates |= {g for c in cves for g in by_cve[c] if a.published - groups[g]["start"] <= WINDOW}
         best, best_score = None, threshold
         for gi in candidates:
             g = groups[gi]
-            if a.published - g["start"] > WINDOW:
-                continue
             if cves and g["cves"] and not cves & g["cves"]:
                 continue  # similar wording, different vulnerabilities: separate stories
             if cves & g["cves"]:
                 score = 1.0
             else:  # like one of its recent articles, or like the story as a whole
-                cen = g["centroid"]
-                score = max([_cosine(vec, m[1]) for m in g["members"][-8:]]
-                            + [_cosine(vec, (cen, math.sqrt(sum(v * v for v in cen.values())) or 1.0))])
+                recent = g["members"][-8:]
+                score = max([_cosine(vec, m[1]) for m in recent] + [_cosine(vec, (g["centroid"], g["norm"]))])
                 # Headlines sharing two distinctive names ("Salt Typhoon", "Jaguar Land Rover") need less else in common.
-                if score >= threshold / 2 and any(len(title_names & m[2]) >= 2 for m in g["members"][-8:]):
+                if score >= threshold / 2 and any(len(title_names & m[2]) >= 2 for m in recent):
                     score = max(score, threshold)
             if score >= best_score:
                 best, best_score = gi, score
         if best is None:
             best = len(groups)
-            groups.append({"start": a.published, "members": [], "cves": set(), "centroid": {}})
+            groups.append({"start": a.published, "members": [], "cves": set(), "centroid": {}, "norm": 1.0,
+                           "names": set()})
         g = groups[best]
         g["members"].append((a, vec, title_names))
         for w, v in vec[0].items():
             g["centroid"][w] = g["centroid"].get(w, 0.0) + v
+        g["norm"] = math.sqrt(sum(v * v for v in g["centroid"].values())) or 1.0
         g["cves"] |= cves
-        for w in tokens(a.title):
-            if best not in by_word[w]:
+        g["names"] |= title_names
+        for w in title_words:
+            if best not in by_word[w][-20:]:
                 by_word[w].append(best)
         for c in cves:
             if best not in by_cve[c]:
                 by_cve[c].append(best)
 
-    groups = _merge_similar(groups, threshold)
     multi = 0
-    for g in groups:
-        if len(g["members"]) == 1:
+    for members in _merge_similar(groups):
+        if len(members) == 1:
             continue
-        members = [m[0] for m in g["members"]]
         lead = max(members, key=_quality)
         for m in members:
             m.story = lead.link
-        multi += len(members) > 1
+        multi += 1
     return multi
 
 
-def _merge_similar(groups: list[dict], threshold: float) -> list[dict]:
+def _merge_similar(groups: list[dict]) -> list[list[Article]]:
     """Coverage often starts as two threads (the advisory, then 'hackers exploit X') before articles that bridge
-    them arrive. Join groups that read alike as a whole, started within the window and don't name different CVEs."""
-    def norm(c):
-        return c, math.sqrt(sum(v * v for v in c.values())) or 1.0
+    them arrive. Join groups that share a distinctive headline name, read alike as a whole, started within the
+    window and don't name different CVEs. Returns each final story's articles."""
+    parent = list(range(len(groups)))
 
-    merged = True
-    while merged:
-        merged = False
-        for i, g in enumerate(groups):
-            for h in groups[i + 1:]:
-                if abs(h["start"] - g["start"]) > WINDOW or (g["cves"] and h["cves"] and not g["cves"] & h["cves"]):
-                    continue
-                if _cosine(norm(g["centroid"]), norm(h["centroid"])) >= MERGE_THRESHOLD:
-                    g["members"] = sorted(g["members"] + h["members"], key=lambda m: m[0].published)
-                    g["start"] = min(g["start"], h["start"])
-                    g["cves"] |= h["cves"]
-                    for w, v in h["centroid"].items():
-                        g["centroid"][w] = g["centroid"].get(w, 0.0) + v
-                    groups.remove(h)
-                    merged = True
+    def find(i):
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    by_name: dict[str, list[int]] = defaultdict(list)
+    for i, g in enumerate(groups):  # groups are in order of their first article
+        seen = set()
+        for w in g["names"]:
+            for j in reversed(by_name[w]):
+                if g["start"] - groups[j]["start"] > WINDOW:
                     break
-            if merged:
-                break
-    return groups
+                if j in seen:
+                    continue
+                seen.add(j)
+                h = groups[j]
+                if g["cves"] and h["cves"] and not g["cves"] & h["cves"]:
+                    continue
+                if _cosine((g["centroid"], g["norm"]), (h["centroid"], h["norm"])) >= MERGE_THRESHOLD:
+                    parent[find(i)] = find(j)
+            by_name[w].append(i)
+    out: dict[int, list[Article]] = defaultdict(list)
+    for i, g in enumerate(groups):
+        out[find(i)] += [m[0] for m in g["members"]]
+    return list(out.values())
 
 
 def collapse(articles: list[Article]) -> list[tuple[Article, list[Article]]]:
