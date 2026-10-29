@@ -1,0 +1,161 @@
+{
+  "_comment": "How stories are scored for severity/importance (0-100). Each group adds up the points of the signals it finds in a story's headlines and summaries (every outlet's article counts), up to the group's max. 'keywords' are whole words/phrases like categories.json (plurals and hyphen/space variations match); 'patterns' are regular expressions. Edit freely: changes apply on the next run.",
+
+  "_levels": "A story's level comes from its score.",
+  "levels": [
+    {"id": "critical", "name": "Critical", "min": 70, "color": "#b00020"},
+    {"id": "high", "name": "High", "min": 50, "color": "#d9480f"},
+    {"id": "medium", "name": "Medium", "min": 30, "color": "#b08900"},
+    {"id": "low", "name": "Low", "min": 0, "color": "#64748b"}
+  ],
+
+  "groups": [
+    {"id": "exploitation", "name": "Exploitation", "max": 30, "signals": [
+      {"id": "exploited", "label": "Actively exploited", "points": 30,
+       "keywords": ["actively exploited", "exploited in the wild", "in-the-wild exploitation", "under active exploitation",
+                    "under attack", "exploited in attacks", "exploited as a zero-day", "exploited zero-day", "Known Exploited Vulnerabilities",
+                    "KEV catalog", "being exploited", "mass exploitation", "exploited to breach", "exploited to deploy", "exploited to hack"],
+       "patterns": ["\\bexploit(ed|ing)\\b.{0,60}\\b(in attacks|in the wild|by (hackers|attackers|threat actors|ransomware))",
+                    "\\b(hackers|attackers|threat actors|ransomware gangs?|apts?)\\b.{0,40}\\bexploit(ed|ing|s)?\\b",
+                    "\\bexploitation (has )?(begun|began|started|under ?way)\\b", "\\bnow exploited\\b"]},
+      {"id": "zero-day", "label": "Zero-day", "points": 20, "keywords": ["zero-day", "zero day", "0-day", "0day"]},
+      {"id": "poc", "label": "Public exploit or exploitation attempts", "points": 15,
+       "keywords": ["proof-of-concept", "proof of concept", "PoC", "exploit code", "exploit released", "public exploit",
+                    "working exploit", "exploitation attempts", "scanning for", "scans for"]}
+    ]},
+
+    {"id": "technical", "name": "Technical severity", "max": 20, "signals": [
+      {"id": "cvss-critical", "label": "Critical severity (CVSS 9+)", "points": 15, "computed": "cvss", "min_cvss": 9.0,
+       "keywords": ["critical vulnerability", "critical flaw", "critical bug", "critical-severity", "max severity",
+                    "maximum severity", "maximum-severity", "max-severity", "CVSS 10", "perfect 10"]},
+      {"id": "cvss-high", "label": "High severity (CVSS 7+)", "points": 8, "computed": "cvss", "min_cvss": 7.0, "unless": "cvss-critical",
+       "keywords": ["high-severity", "high severity"]},
+      {"id": "unauth-rce", "label": "Unauthenticated / remote code execution", "points": 10,
+       "keywords": ["unauthenticated", "pre-auth", "pre-authentication", "without authentication", "authentication bypass",
+                    "auth bypass", "remote code execution", "RCE", "zero-click", "zero click", "wormable", "root access",
+                    "full control", "takeover"]}
+    ]},
+
+    {"id": "impact", "name": "Impact & scale", "max": 25, "signals": [
+      {"id": "scale", "label": "People, records or devices affected", "computed": "scale",
+       "_tiers": "affected count -> points",
+       "tiers": [[100000000, 20], [10000000, 16], [1000000, 12], [100000, 8], [10000, 4]]},
+      {"id": "money", "label": "Money stolen or lost", "computed": "money",
+       "tiers": [[100000000, 12], [10000000, 9], [1000000, 5]]},
+      {"id": "physical", "label": "Real-world / physical impact", "points": 10,
+       "keywords": ["physical damage", "physical impact", "safety risk", "safety risks", "public safety", "food safety", "spoiled food",
+                    "spoiling food", "temperatures", "explosion", "patients diverted", "ambulances diverted", "diverting ambulances",
+                    "surgeries cancelled", "cancelled surgeries", "water supply", "drinking water", "manipulated setpoints",
+                    "tampered with", "heating systems", "loss of power", "without power"]},
+      {"id": "widespread", "label": "Widespread", "points": 5,
+       "keywords": ["hundreds of", "thousands of", "millions of", "nationwide", "across Europe", "across the country",
+                    "multiple countries", "worldwide", "dozens of countries", "across the globe"]},
+      {"id": "disruption", "label": "Operations disrupted", "points": 8,
+       "keywords": ["outage", "systems offline", "taken offline", "takes systems offline", "production halted", "halts production",
+                    "shut down operations", "operations disrupted", "disrupts operations", "disrupted operations", "service disruption",
+                    "forced to shut", "flights cancelled", "cancelled flights", "power outage", "blackout", "unable to operate"]},
+      {"id": "destructive", "label": "Destructive attack", "points": 8,
+       "keywords": ["wiper", "data destruction", "destructive", "bricked", "sabotage", "encrypted systems", "encrypted servers"]},
+      {"id": "data-theft", "label": "Data stolen or exposed", "points": 5,
+       "keywords": ["data breach", "data theft", "stolen data", "stole data", "exfiltrated", "leaked data", "data leak",
+                    "exposed data", "personal data", "personal information", "customer data", "patient data", "records exposed"]}
+    ]},
+
+    {"id": "actor", "name": "Threat actor & TTPs", "max": 15, "signals": [
+      {"id": "nation-state", "label": "Nation-state / APT", "points": 10,
+       "keywords": ["nation-state", "state-sponsored", "state-backed", "APT", "advanced persistent threat", "espionage",
+                    "cyber espionage", "Typhoon", "Lazarus", "Kimsuky", "Sandworm", "APT28", "APT29", "Fancy Bear", "Cozy Bear",
+                    "Midnight Blizzard", "Volt Typhoon", "Salt Typhoon", "Flax Typhoon", "Charming Kitten", "MuddyWater",
+                    "Turla", "Gamaredon", "GRU", "SVR", "MSS", "IRGC", "DPRK", "North Korean hackers", "Chinese hackers",
+                    "Russian hackers", "Iranian hackers", "China-nexus", "China-linked", "Russia-linked", "Iran-linked"]},
+      {"id": "ransomware", "label": "Ransomware", "points": 8,
+       "keywords": ["ransomware", "ransom note", "extortion gang", "double extortion", "LockBit", "Qilin", "Akira", "Play ransomware",
+                    "Black Basta", "BlackCat", "ALPHV", "Cl0p", "Clop", "Scattered Spider", "ShinyHunters", "RansomHub", "Medusa"]},
+      {"id": "supply-chain", "label": "Supply chain compromise", "points": 10,
+       "keywords": ["supply chain attack", "supply-chain attack", "supply chain compromise", "compromised package",
+                    "malicious package", "malicious update", "trojanized", "backdoored package", "hijacked package",
+                    "compromised npm", "npm packages", "PyPI packages", "Shai-Hulud", "build pipeline", "GitHub Actions"]},
+      {"id": "worm", "label": "Self-spreading / mass exploitation", "points": 8,
+       "keywords": ["worm", "self-propagating", "self-spreading", "botnet", "mass exploitation", "mass-exploitation",
+                    "thousands of servers", "thousands of devices", "hundreds of organizations", "hundreds of organisations"]},
+      {"id": "persistence", "label": "Backdoor / implant", "points": 5,
+       "keywords": ["backdoor", "implant", "rootkit", "bootkit", "webshell", "web shell", "persistence", "firmware malware"]}
+    ]},
+
+    {"id": "target", "name": "Target criticality", "max": 15, "signals": [
+      {"id": "critical-sector", "label": "Critical-infrastructure sector", "points": 8, "computed": "industries",
+       "industries": ["energy", "healthcare", "government", "defense", "telecom", "finance", "transportation"],
+       "keywords": ["critical infrastructure", "critical national infrastructure", "water utility", "water utilities",
+                    "power grid", "electric grid", "nuclear", "hospital", "air traffic"]},
+      {"id": "ics-ot", "label": "ICS / OT", "points": 8, "computed": "topics", "topics": ["ics-ot"]},
+      {"id": "edge-product", "label": "Widely deployed edge/enterprise product", "points": 7,
+       "keywords": ["VPN", "firewall", "firewalls", "gateway", "router", "routers", "load balancer", "Microsoft Exchange", "Exchange Server", "SharePoint",
+                    "Active Directory", "Windows", "Chrome", "iOS", "Android", "macOS", "Linux kernel", "OpenSSH", "Citrix",
+                    "NetScaler", "Fortinet", "FortiGate", "FortiOS", "FortiWeb", "Ivanti", "Connect Secure", "Palo Alto",
+                    "PAN-OS", "GlobalProtect", "Cisco", "SonicWall", "Juniper", "Check Point", "BIG-IP", "VMware", "ESXi",
+                    "vCenter", "Confluence", "Jira", "Atlassian", "GitLab", "Jenkins", "Kubernetes", "Docker", "Oracle E-Business",
+                    "SAP NetWeaver", "MOVEit", "Zimbra", "Veeam", "Microsoft 365", "Entra ID", "Azure AD", "Okta", "Salesforce",
+                    "Snowflake", "Cloudflare", "AWS"]}
+    ]},
+
+    {"id": "importance", "name": "World importance", "max": 20, "signals": [
+      {"id": "coverage", "label": "Widely reported", "computed": "coverage",
+       "_tiers": "number of outlets covering the story -> points",
+       "tiers": [[12, 14], [8, 11], [5, 8], [3, 5], [2, 3]]},
+      {"id": "advisory", "label": "Government advisory / directive", "points": 6, "computed": "sources",
+       "sources": ["CISA Known Exploited Vulnerabilities", "CISA Advisories", "CISA ICS Advisories", "NCSC UK",
+                   "CISA ICS Medical Advisories"],
+       "keywords": ["joint advisory", "emergency directive", "CISA warns", "CISA urges", "CISA orders", "NCSC warns", "FBI warns",
+                    "NSA warns", "binding operational directive", "federal agencies ordered", "orders federal agencies"]},
+      {"id": "geopolitics", "label": "Geopolitical context", "points": 5,
+       "keywords": ["war", "invasion", "election", "elections", "election interference", "sanctions", "sanctioned",
+                    "hacktivist", "hacktivists", "military", "ministry of defence", "ministry of defense", "Ukraine", "Taiwan",
+                    "Israel", "NATO"]}
+    ]}
+  ],
+
+  "_negations": "If one of these is in an article, its 'Actively exploited' and 'Zero-day' signals don't count (e.g. 'no evidence of exploitation in the wild').",
+  "negations": ["\\bno (evidence|signs?|indications?|reports?)\\b.{0,40}\\bexploit", "\\bnot (been |being |yet |known to have been )?(actively )?exploited\\b",
+                "\\bnot aware of .{0,40}\\bexploit", "\\bno known (active )?exploitation\\b", "\\bunaware of any .{0,30}exploit"],
+
+  "_not_threats": "Headlines like these aren't threat reports (funding, deals, listicles, events, opinion), so their score is capped at not_threat_cap.",
+  "not_threat_cap": 20,
+  "not_threats": ["raises \\$", "raised \\$", "\\bfunding\\b", "series [a-e]\\b", "\\bacquire[sd]?\\b", "\\bacquisition\\b", "\\bmerger\\b",
+                  "\\bbest\\b.{0,60}\\b(tools|platforms|software|solutions)\\b", "\\bcompared\\b.{0,40}features", "\\bwebinar\\b",
+                  "\\bpodcast\\b", "\\bhow to\\b", "\\btips\\b", "\\bopinion\\b", "\\binterview\\b", "\\bconversations?:", "\\bsurvey\\b",
+                  "\\bpartners? with\\b", "\\blaunch(es|ed)?\\b.{0,40}\\b(platform|product|tool|service)\\b", "\\bappoints?\\b", "\\bhires?\\b",
+                  "\\bnamed (ceo|ciso|cto)\\b", "\\bawards?\\b", "\\bconference\\b", "\\bsponsored\\b", "\\breview:"],
+
+  "_ttps": "MITRE ATT&CK techniques spotted in a story's coverage (shown with the score, and counted in the Markdown bulletin).",
+  "ttps": [
+    {"id": "T1190", "name": "Exploit Public-Facing Application", "tactic": "Initial Access",
+     "patterns": ["\\bexploit(ed|ing|s|ation)?\\b.{0,80}\\b(vpn|firewall|gateway|router|server|appliance|web app|portal|netscaler|connect secure|pan-os|fortigate|exchange|confluence|jira|gitlab|plugin)",
+                  "\\b(vpn|firewall|gateway|router|server|appliance|netscaler|connect secure|pan-os|fortigate|exchange|confluence|jira|gitlab|plugin)s?\\b.{0,80}\\bexploit(ed|ing|ation)\\b"]},
+    {"id": "T1566", "name": "Phishing", "tactic": "Initial Access", "keywords": ["phishing", "spear-phishing", "spearphishing", "malicious attachment", "lure", "lures", "phishing kit"]},
+    {"id": "T1195", "name": "Supply Chain Compromise", "tactic": "Initial Access", "keywords": ["supply chain attack", "supply-chain attack", "supply chain compromise", "malicious package", "compromised package", "trojanized", "malicious update", "npm packages", "PyPI packages", "hijacked package"]},
+    {"id": "T1078", "name": "Valid Accounts", "tactic": "Initial Access", "keywords": ["stolen credentials", "compromised credentials", "compromised account", "employee account", "valid accounts", "credential theft", "stolen employee credentials"]},
+    {"id": "T1133", "name": "External Remote Services", "tactic": "Initial Access", "keywords": ["RDP", "remote desktop", "remote access", "RMM", "remote monitoring and management"]},
+    {"id": "T1189", "name": "Drive-by Compromise", "tactic": "Initial Access", "keywords": ["drive-by", "watering hole", "malvertising", "SEO poisoning"]},
+    {"id": "T1200", "name": "Hardware Additions", "tactic": "Initial Access", "keywords": ["hardware implant", "spy chip", "implanted chip", "malicious hardware", "rogue device"]},
+    {"id": "T1204", "name": "User Execution", "tactic": "Execution", "keywords": ["ClickFix", "fake CAPTCHA", "FileFix", "fake update", "fake installer", "fake job interview", "fake job interviews"]},
+    {"id": "T1059", "name": "Command and Scripting Interpreter", "tactic": "Execution", "keywords": ["PowerShell", "VBScript", "JavaScript payload", "command injection", "malicious script"]},
+    {"id": "T1505.003", "name": "Web Shell", "tactic": "Persistence", "keywords": ["webshell", "web shell"]},
+    {"id": "T1542", "name": "Pre-OS Boot / Firmware", "tactic": "Persistence", "keywords": ["bootkit", "firmware implant", "firmware malware", "UEFI", "preinstalled malware", "pre-installed malware", "secure boot bypass"]},
+    {"id": "T1068", "name": "Exploitation for Privilege Escalation", "tactic": "Privilege Escalation", "keywords": ["privilege escalation", "elevation of privilege", "root access", "gain root", "LPE", "local privilege escalation"]},
+    {"id": "T1556", "name": "Modify Authentication Process / MFA bypass", "tactic": "Credential Access", "keywords": ["MFA bypass", "bypass MFA", "bypasses MFA", "2FA bypass", "authentication bypass", "adversary-in-the-middle", "AiTM"]},
+    {"id": "T1110", "name": "Brute Force", "tactic": "Credential Access", "keywords": ["brute force", "brute-force", "password spraying", "credential stuffing"]},
+    {"id": "T1555", "name": "Credentials from Password Stores", "tactic": "Credential Access", "keywords": ["infostealer", "info-stealer", "stealer", "steal passwords", "browser passwords", "credential stealer", "password stealer", "steals credentials"]},
+    {"id": "T1539", "name": "Steal Web Session Cookie", "tactic": "Credential Access", "keywords": ["session hijacking", "session cookies", "cookie theft", "session tokens", "steal session"]},
+    {"id": "T1071", "name": "Application Layer Protocol (C2)", "tactic": "Command and Control", "keywords": ["command-and-control", "command and control", "C2", "C2 server", "C2 servers"]},
+    {"id": "T1090", "name": "Proxy", "tactic": "Command and Control", "keywords": ["residential proxy", "proxy botnet", "proxy network", "proxy nodes", "ORB network"]},
+    {"id": "T1041", "name": "Exfiltration Over C2 Channel", "tactic": "Exfiltration", "keywords": ["exfiltrated", "exfiltration", "data exfiltration", "stole data", "stolen data", "data theft"]},
+    {"id": "T1486", "name": "Data Encrypted for Impact", "tactic": "Impact", "keywords": ["ransomware", "encrypted systems", "encrypted files", "encryptor"]},
+    {"id": "T1485", "name": "Data Destruction", "tactic": "Impact", "keywords": ["wiper", "data destruction", "wiped"]},
+    {"id": "T1498", "name": "Network Denial of Service", "tactic": "Impact", "keywords": ["DDoS", "denial of service", "denial-of-service"]},
+    {"id": "T1496", "name": "Resource Hijacking", "tactic": "Impact", "keywords": ["cryptominer", "crypto miner", "cryptomining", "crypto mining", "XMRig", "cryptojacking"]},
+    {"id": "T1657", "name": "Financial Theft", "tactic": "Impact", "keywords": ["crypto heist", "cryptocurrency theft", "crypto theft", "stole cryptocurrency", "drained", "BEC", "business email compromise", "wire fraud"]},
+    {"id": "T1584", "name": "Compromise Infrastructure", "tactic": "Resource Development", "keywords": ["domain hijack", "domain hijacking", "hijacked domains", "registry hijack", "registrar", "DNS hijacking"]},
+    {"id": "T0883", "name": "Internet Accessible Device (ICS)", "tactic": "Initial Access (ICS)", "keywords": ["internet-exposed HMI", "exposed HMI", "exposed HMIs", "internet-exposed PLC", "exposed PLCs", "internet-facing controllers", "exposed controllers"]},
+    {"id": "T0831", "name": "Manipulation of Control (ICS)", "tactic": "Impact (ICS)", "keywords": ["manipulated setpoints", "changed setpoints", "tampered with HMI", "manipulation of control", "manipulated controllers", "hijacking controllers", "hijacked controllers"]}
+  ]
+}

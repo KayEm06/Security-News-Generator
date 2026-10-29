@@ -1,0 +1,68 @@
+# TEMPORARY: checks severity scoring against the real article archive (read-only). Removed before merging.
+name: Severity scoring check
+
+on:
+  push:
+    branches: [feature/severity-scoring]
+    paths: [secnews/**, .github/workflows/score-check.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Restore article archive (read-only)
+        uses: actions/cache/restore@v4
+        with:
+          path: .secnews
+          key: secnews-archive-none
+          restore-keys: secnews-archive-
+      - name: Show scores
+        run: |
+          python - <<'PY'
+          import random, time
+          from collections import Counter, defaultdict
+          from datetime import datetime, timedelta, timezone
+          from pathlib import Path
+          from secnews.archive import load_archive
+          from secnews.classify import Classifier, deduplicate
+          from secnews.config import load_sources, load_taxonomy
+          from secnews.scoring import Scorer
+          from secnews.stories import group_stories, outlets
+          arts = load_archive(Path(".secnews/archive.json"))
+          c = Classifier(load_taxonomy(None), load_sources(None))
+          for a in arts: c.classify(a)
+          arts = deduplicate(arts); group_stories(arts)
+          t = time.time(); levels = Scorer().score_all(arts); took = time.time() - t
+          stories = defaultdict(list)
+          for a in arts: stories[a.story or a.link].append(a)
+          recent = datetime.now(timezone.utc) - timedelta(days=14)
+          st = [g for g in stories.values() if max((a.published for a in g if a.published), default=recent - timedelta(1)) >= recent]
+          print(f"{len(arts)} articles, {len(stories)} stories; scoring took {took:.1f}s; levels (all): {levels}")
+          print("recent 14 days:", len(st), "stories;", Counter(g[0].severity for g in st))
+          hist = Counter(min(g[0].score // 10 * 10, 90) for g in st)
+          print("histogram:", " ".join(f"{k}-{k+9}:{hist[k]}" for k in range(0, 100, 10)))
+          def show(g):
+              a = next((x for x in g if x.link == x.story), g[0])
+              rs = "; ".join(f"{r['label']} {r['points']:+d}" for r in a.reasons)
+              print(f"\n{a.score:3d} {a.severity:8} | {len(outlets(a, [x for x in g if x is not a])):2d} outlets | {a.published:%d %b} | {a.title[:110]}")
+              print(f"       {rs}")
+              if a.ttps: print(f"       TTPs: {', '.join(a.ttps)}")
+          st.sort(key=lambda g: -g[0].score)
+          print("\n\n######## TOP 60"); [show(g) for g in st[:60]]
+          random.seed(1)
+          for lvl in ("high", "medium"):
+              pool = [g for g in st if g[0].severity == lvl]
+              print(f"\n\n######## SAMPLE {lvl.upper()}"); [show(g) for g in random.sample(pool, min(20, len(pool)))]
+          print("\n\n######## LOW but covered by 5+ outlets (possible misses)")
+          [show(g) for g in st if g[0].severity == "low" and len(outlets(g[0], g[1:])) >= 5][:30]
+          print("\n\n######## TTP counts (14 days)")
+          print(Counter(t for g in st for t in g[0].ttps).most_common())
+          PY

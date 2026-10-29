@@ -20,6 +20,11 @@ class Article:
     cves: list[str] = field(default_factory=list)
     also_reported_by: list[str] = field(default_factory=list)
     story: str = ""  # link of the article representing the story this one belongs to (see stories.py)
+    # Severity of the story (see scoring.py): 0-100, its level, why, and the ATT&CK techniques mentioned.
+    score: int = 0
+    severity: str = ""
+    reasons: list[dict] = field(default_factory=list)
+    ttps: list[str] = field(default_factory=list)
 
     @property
     def primary_topic(self) -> str:

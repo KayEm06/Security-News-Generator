@@ -388,7 +388,7 @@
         "critical infrastructure", "CNI", "power grid", "electric grid", "smart grid", "substation", "water utility",
         "water treatment", "wastewater", "dam", "gas pipeline", "oil pipeline", "pipeline operator", "oil and gas",
         "Modbus", "DNP3", "OPC UA", "Profinet", "EtherNet/IP", "BACnet", "IEC 61850", "IEC 62443", "NERC CIP",
-        "building management system", "building automation", "railway signalling", "maritime",
+        "building management system", "building automation", "refrigeration controller", "refrigeration controllers", "refrigeration system", "HVAC", "Danfoss", "Copeland", "railway signalling", "maritime",
         "Siemens", "SIMATIC", "Schneider Electric", "Modicon", "Rockwell", "Allen-Bradley", "Honeywell", "ABB",
         "Emerson", "Yokogawa", "Mitsubishi Electric", "Moxa", "Phoenix Contact", "WAGO", "Unitronics", "CODESYS",
         "Triton", "Trisis", "Industroyer", "Pipedream", "Incontroller", "FrostyGoop", "Fuxnet", "IOCONTROL",

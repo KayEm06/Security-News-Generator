@@ -12,6 +12,7 @@ from pathlib import Path
 from . import __version__
 from .archive import DEFAULT_KEEP_DAYS, default_path, load_archive, save_archive
 from .classify import Classifier, deduplicate, filter_articles, resolve_ids
+from .scoring import load_scorer
 from .stories import group_stories
 from .config import load_site, load_sources, load_taxonomy
 from .feeds import enrich_from_pages, fetch_all, needs_page_lookup
@@ -58,6 +59,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     p.add_argument("--sources-file", help="custom sources JSON (default: bundled list)")
     p.add_argument("--categories-file", help="custom categories JSON (default: bundled rules)")
+    p.add_argument("--scoring-file", help="custom severity scoring JSON (default: bundled criteria)")
     p.add_argument("--site-file", help="custom page/briefing settings JSON (default: bundled site.json)")
     sub = p.add_subparsers(dest="command", required=True)
     gather = _gather_options()
@@ -195,6 +197,9 @@ def _gather(args, taxonomy) -> tuple[list[Article], list[Article], dict[str, str
         if not args.no_merge:
             grouped = group_stories(articles)
             _log(args, f"Grouped coverage of the same events into {grouped} multi-outlet stories")
+    # Score every story for severity (re-done each run, so edits to scoring.json apply to saved JSON too).
+    levels = load_scorer(getattr(args, "scoring_file", None)).score_all(articles)
+    _log(args, "Scored stories: " + ", ".join(f"{n} {lvl}" for lvl, n in sorted(levels.items(), key=lambda x: -x[1])))
     everything = articles
     if archive_path and args.type:
         allowed = {s.name for s in sources}
