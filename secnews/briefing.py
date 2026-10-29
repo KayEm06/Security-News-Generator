@@ -350,7 +350,8 @@ def build_text(sections: list[Section] | list[Article], title: str, date: dateti
             when = f" ({a.published.strftime('%d %b')})" if sec.catch_up and a.published else ""
             others = outlets(a)[1:]
             also = [f"Also covered by: {', '.join(others[:4])}{f' and {len(others) - 4} more' if len(others) > 4 else ''}"] if others else []
-            lines += [a.title, f"{a.source}{when} - {a.link}", *also, a.summary[:320], ""]
+            sev = f"[{SEVERITY_STYLE[a.severity][0]} {a.score}] " if a.severity in SEVERITY_STYLE else ""
+            lines += [sev + a.title, f"{a.source}{when} - {a.link}", *also, a.summary[:320], ""]
     lines.append("Reply to this email to unsubscribe.")
     return "\n".join(lines)
 
