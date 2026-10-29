@@ -397,6 +397,104 @@ class StoryTests(unittest.TestCase):
         self.assertIn("3 sources, in 1 stories", md)
 
 
+class ScoringTests(unittest.TestCase):
+    T0 = datetime(2026, 10, 20, 9, tzinfo=timezone.utc)
+
+    def art(self, title, summary="", src="Test", hours=0, link=None, **kw):
+        a = Article(title=title, link=link or f"https://{src.replace(' ', '').lower()}/{abs(hash(title))}", source=src,
+                    published=self.T0 + timedelta(hours=hours), summary=summary, **kw)
+        Classifier(TAX).classify(a)
+        return a
+
+    def score(self, *arts):
+        from secnews.scoring import Scorer
+        return Scorer().score_story(list(arts))
+
+    def test_exploited_critical_edge_flaw_is_critical(self):
+        from secnews.scoring import Scorer
+        a = self.art("Palo Alto Networks warns of PAN-OS zero-day exploited in attacks",
+                     "An unauthenticated RCE flaw (CVSS 9.8) in PAN-OS firewalls is actively exploited by state-sponsored hackers.")
+        b = self.art("CISA orders agencies to patch PAN-OS flaw", "It was added to the Known Exploited Vulnerabilities catalog.",
+                     src="The Record", hours=3)
+        score, reasons, ttps = self.score(a, b)
+        labels = [r["label"] for r in reasons]
+        self.assertGreaterEqual(score, 70)
+        self.assertEqual(Scorer().level_of(score)["id"], "critical")
+        for want in ("Actively exploited", "Critical severity (CVSS 9+)", "Nation-state / APT", "Widely deployed edge/enterprise product"):
+            self.assertIn(want, labels)
+        self.assertIn("T1190", ttps)
+
+    def test_evidence_is_pooled_across_outlets(self):
+        one, _, _ = self.score(self.art("Fortinet patches FortiGate flaw", "A CVSS 9.8 bug."))
+        both, _, _ = self.score(self.art("Fortinet patches FortiGate flaw", "A CVSS 9.8 bug."),
+                                self.art("FortiGate bug exploited in the wild", src="Other", hours=2))
+        self.assertGreater(both, one + 25)
+
+    def test_negated_or_hypothetical_exploitation_doesnt_count(self):
+        for title, summary in [("Fortinet fixes FortiWeb flaw", "There is no evidence that it has been exploited in the wild."),
+                               ("Tailscale flaws could let hackers gain root access", "The bugs could let hackers exploit SSH servers.")]:
+            _, reasons, _ = self.score(self.art(title, summary))
+            self.assertNotIn("Actively exploited", [r["label"] for r in reasons], title)
+
+    def test_impact_scale_and_money(self):
+        _, reasons, _ = self.score(self.art("Denmark breach exposes 8.8 million people", "Attackers stole personal data of 8.8 million people."))
+        self.assertIn({"group": "Impact & scale", "label": "People, records or devices affected", "points": 13}, reasons)
+        _, reasons, _ = self.score(self.art("Ledger implant behind crypto heist", "Attackers drained $93 million from wallets."))
+        self.assertIn("Money stolen or lost", [r["label"] for r in reasons])
+        _, reasons, _ = self.score(self.art("US offers $10 million reward for hacker"))  # a reward isn't a loss
+        self.assertNotIn("Money stolen or lost", [r["label"] for r in reasons])
+
+    def test_non_threats_and_law_enforcement_are_capped(self):
+        score, reasons, _ = self.score(self.art("Startup raises $40 million for ransomware defence",
+                                                "Attackers actively exploited critical zero-day flaws in VPNs, it says."))
+        self.assertLessEqual(score, 20)
+        self.assertTrue(any(r["points"] < 0 for r in reasons))
+        score, _, _ = self.score(self.art("10 Best SAST Tools Compared (2026): Features & Pricing", "Actively exploited ransomware"))
+        self.assertLessEqual(score, 20)
+        score, _, _ = self.score(self.art("Ransomware affiliate sentenced to 70 months in prison",
+                                          "He exploited VPN zero-days in attacks on hospitals and stole $20 million in ransoms."))
+        self.assertLessEqual(score, 45)
+
+    def test_score_all_sets_every_article_of_a_story(self):
+        from secnews.scoring import Scorer
+        a = self.art("Ivanti zero-day exploited in attacks", link="https://a/1")
+        b = self.art("Ivanti VPN bug under active exploitation", src="Other", link="https://b/1")
+        b.story = a.story = a.link
+        lone = self.art("Weekly podcast episode", link="https://c/1")
+        counts = Scorer().score_all([a, b, lone])
+        self.assertEqual((a.score, a.severity, a.ttps), (b.score, b.severity, b.ttps))
+        self.assertEqual(sum(counts.values()), 2)
+        self.assertEqual(lone.severity, "low")
+
+    def test_markdown_bulletin_leads_with_top_threats(self):
+        from secnews.render import to_csv, to_markdown
+        from secnews.scoring import Scorer
+        arts = [self.art("Ivanti zero-day exploited in attacks", "Unauthenticated RCE in Connect Secure VPN, CVSS 9.8."),
+                self.art("Company appoints new CISO", hours=1)]
+        Scorer().score_all(arts)
+        md = to_markdown(arts, TAX, {})
+        self.assertIn("### Top threats", md)
+        self.assertIn("### ATT&CK techniques seen", md)
+        self.assertIn("T1190 Exploit Public-Facing Application", md)
+        self.assertIn("Why: Actively exploited (+30)", md)
+        self.assertIn("severity,score,why,attack_techniques", to_csv(arts, TAX, {}).splitlines()[0])
+
+    def test_briefing_dont_miss_catches_older_severe_story(self):
+        from secnews.briefing import build_html, plan_briefing
+        from secnews.scoring import Scorer
+        severe = self.art("Citrix NetScaler zero-day exploited in attacks", "Unauthenticated RCE, CVSS 9.8, exploited by ransomware gangs.",
+                          hours=-48)
+        today = [self.art(f"Minor update number {i}", "Nothing much.", hours=-i) for i in range(1, 6)]
+        Scorer().score_all([severe, *today])
+        now = self.T0
+        secs = plan_briefing([severe, *today], now, hours=24, limit=10)
+        self.assertEqual([s.heading for s in secs][-1], "Don't miss")
+        self.assertIs(secs[-1].stories[0], severe)
+        self.assertIn("Why: Actively exploited", build_html(secs, TAX, "T", now))
+        later = plan_briefing([severe, *today], now, hours=24, limit=10, already_sent={severe.link})
+        self.assertNotIn("Don't miss", [s.heading for s in later])
+
+
 class ConfigTests(unittest.TestCase):
     def test_bundled_config_is_consistent(self):
         sources = load_sources()

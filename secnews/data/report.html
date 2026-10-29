@@ -134,6 +134,36 @@ a.thumb:hover img { transform: scale(1.03); }
 .related li a:hover { text-decoration: underline; }
 .related li .s { display: block; font-size: 12px; color: var(--navy); margin-top: 2px; }
 .related li .s time { color: var(--maroon-text); margin-left: 6px; }
+/* ---- Severity ---- */
+.sev { display: inline-block; color: #fff; background: var(--sc, #64748b); font-size: 11px; font-weight: 800; letter-spacing: .04em; padding: 1px 6px; line-height: 16px; }
+.byline .sev { margin-right: 2px; }
+.why { margin-top: 8px; font-size: 13px; }
+.why summary { cursor: pointer; color: var(--sc, var(--navy)); font-weight: 700; list-style: none; display: inline-flex; gap: 6px; align-items: center; }
+.why summary::-webkit-details-marker { display: none; }
+.why summary::before { content: "▸"; font-size: 11px; transition: transform .15s; }
+.why[open] summary::before { transform: rotate(90deg); }
+.why summary:focus-visible { outline: 2px solid var(--navy); outline-offset: 2px; }
+.why ul { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 2px; }
+.why li { display: flex; justify-content: space-between; gap: 12px; max-width: 460px; border-bottom: 1px dotted var(--line); padding: 2px 0; }
+.why li b { font-variant-numeric: tabular-nums; }
+.why li.neg b { color: var(--muted); }
+.ttps { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px; }
+.ttps span { font-size: 11.5px; color: var(--navy); border: 1px solid #c9cfe8; padding: 0 5px; }
+.ranked { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 6px; align-items: start; }
+@media (max-width: 560px) { .ranked { grid-template-columns: minmax(0, 1fr); } .ranked .rank { display: none; } }
+.rank { font-size: 22px; font-weight: 800; color: var(--faint); font-variant-numeric: tabular-nums; }
+.top-controls { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin: 0 0 14px; }
+.seg { display: inline-flex; border: 1px solid var(--line); }
+.seg button { border: 0; background: #fff; padding: 5px 10px; font-size: 13px; font-weight: 600; color: var(--navy); cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { background: var(--navy); color: #fff; }
+.seg button:focus-visible { outline: 2px solid var(--navy); outline-offset: 1px; }
+.level-sum { font-size: 13px; color: var(--muted); display: flex; gap: 10px; flex-wrap: wrap; }
+.criteria { margin-top: 28px; font-size: 13px; border-top: 1px solid var(--line); padding-top: 12px; }
+.criteria summary { cursor: pointer; font-weight: 700; color: var(--navy); }
+.criteria table { border-collapse: collapse; margin-top: 8px; width: 100%; max-width: 640px; }
+.criteria td, .criteria th { text-align: left; padding: 5px 8px 5px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+.severe-strip { margin-bottom: 26px; }
 .headlines .more { color: var(--maroon-text); font-weight: 600; }
 .row .bottom { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
 .load-more { display: block; width: 100%; margin: 20px 0 0; padding: 12px; background: #fff; border: 2px solid var(--navy); color: var(--navy); font-size: 14px; font-weight: 800; cursor: pointer; letter-spacing: .02em; }
@@ -332,7 +362,8 @@ let watch = load("secnews:watch", []);      // ["CVE-2026-1234", "ivanti", ...]
 let watchSeen = load("secnews:watchSeen", 0); // ms timestamp of the last CVE Watch visit
 
 // ---- Filter state ------------------------------------------------------------------------------------
-const state = { industries: new Set(), locations: new Set(), sources: new Set(), days: 0, limit: 0 };
+const state = { industries: new Set(), locations: new Set(), sources: new Set(), days: 0, limit: 0,
+                topDays: 3, topLevel: "all", sort: load("secnews:sort", "latest") };
 const PAGE = 10;
 
 const CVE_ID = /^CVE-\d{4}-\d{4,7}$/i;
@@ -383,6 +414,23 @@ function relatedList(a) {
 }
 const moreNote = (a) => a.more?.length ? ` <span class="more">+${a.more.length} more</span>` : "";
 
+// ---- Severity (scored in Python: see scoring.json) -----------------------------------------------------
+const SC = DATA.scoring || { levels: [], groups: [], caps: [], ttps: {} };
+const level = Object.fromEntries(SC.levels.map(l => [l.id, l]));
+const sevColor = (a) => level[a.severity]?.color || "#64748b";
+const isNotable = (a) => a.severity && a.severity !== "low";
+const sevBadge = (a) => isNotable(a)
+  ? `<span class="sev" style="--sc:${esc(sevColor(a))}" title="Severity score ${a.score}/100">${esc(level[a.severity]?.name || a.severity)} ${a.score}</span>` : "";
+function whyBlock(a, open = false) {
+  if (!a.reasons?.length && !a.ttps?.length) return "";
+  const rs = (a.reasons || []).map(r => `<li class="${r.points < 0 ? "neg" : ""}"><span>${esc(r.label)}</span><b>${r.points > 0 ? "+" : ""}${r.points}</b></li>`).join("");
+  const tt = (a.ttps || []).map(t => `<span title="${esc(SC.ttps[t]?.tactic || "")}">${esc(t)} ${esc(SC.ttps[t]?.name || "")}</span>`).join("");
+  return `<details class="why" style="--sc:${esc(sevColor(a))}"${open ? " open" : ""}><summary>Why ${esc(level[a.severity]?.name || "")} · ${a.score}/100</summary>
+    <ul>${rs}</ul>${tt ? `<div class="ttps" aria-label="MITRE ATT&CK techniques">${tt}</div>` : ""}</details>`;
+}
+const latestDate = (a) => [a, ...(a.more || [])].reduce((d, m) => m.date && (!d || m.date > d) ? m.date : d, null);
+const bySeverity = (x, y) => (y.score || 0) - (x.score || 0) || (latestDate(y) || 0) - (latestDate(x) || 0);
+
 // ---- Story pieces ------------------------------------------------------------------------------------
 const BOOKMARK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M6 3h12v18l-6-4.5L6 21z"/></svg>';
 function saveBtn(a) {
@@ -400,7 +448,7 @@ function thumb(a, cls = "") {
 }
 function byline(a, withAgo = true) {
   const hits = watchHits(a);
-  return `<div class="byline"><span class="src">${esc(a.source)}</span><span class="when" title="${niceDate(a.date)}">${withAgo ? ago(a.date) : niceDate(a.date)}</span>${
+  return `<div class="byline">${sevBadge(a)}<span class="src">${esc(a.source)}</span><span class="when" title="${niceDate(a.date)}">${withAgo ? ago(a.date) : niceDate(a.date)}</span>${
     outletsOf(a) > 1 ? `<span class="also" title="Covered by ${outletsOf(a)} outlets">${outletsOf(a)} outlets</span>` : ""}${
     hits.length ? `<span class="watch">Watching: ${esc(hits.join(", "))}</span>` : ""}</div>`;
 }
@@ -409,12 +457,12 @@ const cveList = (a) => a.cves?.length ? `<div class="cves">${a.cves.slice(0, 6).
 
 const lead = (a) => `<article class="lead">${thumb(a)}<div style="margin-top:14px">${kicker(a)}</div>
   <h1 class="title">${titleLink(a)}</h1>${a.summary ? `<p>${esc(a.summary)}</p>` : ""}${cveList(a)}
-  <div class="meta-row">${byline(a)}${saveBtn(a)}</div>${relatedList(a)}</article>`;
-const tile = (a) => `<article class="tile">${thumb(a)}<div style="margin-top:10px">${kicker(a)}</div>
+  <div class="meta-row">${byline(a)}${saveBtn(a)}</div>${isNotable(a) ? whyBlock(a) : ""}${relatedList(a)}</article>`;
+const tile = (a) => `<article class="tile">${thumb(a)}<div style="margin-top:10px">${sevBadge(a)} ${kicker(a)}</div>
   <h3 class="title">${titleLink(a)}</h3><div class="bottom">${byline(a)}</div><div style="margin-top:8px">${saveBtn(a)}</div></article>`;
 const row = (a) => `<article class="row">${thumb(a)}<div>${kicker(a)}<h3 class="title">${titleLink(a)}</h3>
-  ${a.summary ? `<p>${esc(a.summary)}</p>` : ""}<div class="bottom">${byline(a)}${saveBtn(a)}</div>${cveList(a)}${relatedList(a)}</div></article>`;
-const headline = (a) => `<li><time datetime="${a.published || ""}">${ago(a.date, true)}</time><div>${titleLink(a)}<span class="s">${esc(a.source)}${moreNote(a)}</span></div></li>`;
+  ${a.summary ? `<p>${esc(a.summary)}</p>` : ""}<div class="bottom">${byline(a)}${saveBtn(a)}</div>${cveList(a)}${isNotable(a) ? whyBlock(a) : ""}${relatedList(a)}</div></article>`;
+const headline = (a) => `<li><time datetime="${a.published || ""}">${ago(a.date, true)}</time><div>${titleLink(a)}<span class="s">${sevBadge(a)} ${esc(a.source)}${moreNote(a)}</span></div></li>`;
 
 function rowsWithMore(list, emptyHtml) {
   if (!list.length) return emptyHtml;
@@ -448,7 +496,13 @@ function viewLatest(list) {
   const [top, ...rest] = list;
   const latest = rest.slice(0, 6);
   const used = new Set([top, ...latest].map(a => a.link));
-  let html = activeFiltersBar() + `<div class="front">${lead(top)}<div><h2 class="side-head">Latest</h2><ul class="headlines">${latest.map(headline).join("")}</ul></div></div>`;
+  const since = Date.now() - 3 * 864e5;
+  const severe = list.filter(a => ["critical", "high"].includes(a.severity) && (latestDate(a)?.getTime() || 0) >= since)
+    .sort(bySeverity).slice(0, 3);
+  let html = activeFiltersBar() + (severe.length ? `<section class="section severe-strip"><div class="sec-head" style="--c:${esc(level.critical?.color || "#b00020")}">
+    <h2>Most severe, last 3 days</h2><a href="#/top">All top threats ›</a></div>
+    <div class="${severe.length === 3 ? "tiles" : "rows"}">${severe.map(severe.length === 3 ? tile : row).join("")}</div></section>` : "")
+    + `<div class="front">${lead(top)}<div><h2 class="side-head">Latest</h2><ul class="headlines">${latest.map(headline).join("")}</ul></div></div>`;
   for (const t of topics) {
     if (t.id === "general") continue;
     const items = list.filter(a => !used.has(a.link) && a.topics[0] === t.id).slice(0, 3);
@@ -462,19 +516,56 @@ function viewLatest(list) {
   return html;
 }
 
+// Ranked by severity, not date, so a severe story from two days ago isn't buried under today's news.
+const TOP_PERIODS = [[1, "24 hours"], [3, "3 days"], [7, "7 days"], [30, "30 days"]];
+const TOP_LEVELS = [["all", "All"], ["high", "High and above"], ["critical", "Critical only"]];
+function viewTop(list) {
+  const days = state.days || state.topDays, cutoff = Date.now() - days * 864e5;
+  let items = collapse(list.filter(a => a.date && a.date.getTime() >= cutoff)).filter(a => a.score > 0).sort(bySeverity);
+  const counts = Object.fromEntries(SC.levels.map(l => [l.id, items.filter(a => a.severity === l.id).length]));
+  if (state.topLevel === "high") items = items.filter(a => ["critical", "high"].includes(a.severity));
+  if (state.topLevel === "critical") items = items.filter(a => a.severity === "critical");
+  const seg = (opts, cur, attr) => `<div class="seg" role="group">${opts.map(([v, l]) => `<button type="button" data-${attr}="${v}" aria-pressed="${String(v) === String(cur)}">${l}</button>`).join("")}</div>`;
+  const shown = items.slice(0, state.limit || PAGE);
+  const rowsHtml = shown.map((a, i) => `<div class="ranked"><span class="rank">${i + 1}</span>${row(a)}</div>`).join("");
+  return `<h1 class="page-head" style="--c:${esc(level.critical?.color || "#b00020")}">Top threats</h1>
+    <p class="page-sub">Ranked by severity and importance, not by date. Scores weigh exploitation, technical severity, impact, threat actor, target and how widely a story is reported.</p>
+    <div class="top-controls">${state.days ? `<span class="level-sum">Period: last ${state.days} day${state.days === 1 ? "" : "s"} (from Refine stories)</span>` : seg(TOP_PERIODS, state.topDays, "topdays")}
+      ${seg(TOP_LEVELS, state.topLevel, "toplevel")}
+      <span class="level-sum">${SC.levels.filter(l => counts[l.id]).map(l => `<span><span class="sev" style="--sc:${esc(l.color)}">${esc(l.name)}</span> ${counts[l.id]}</span>`).join("")}</span></div>`
+    + activeFiltersBar()
+    + (shown.length ? `<div class="rows">${rowsHtml}</div>` + (items.length > shown.length
+        ? `<button class="load-more" id="more">Load more stories <span style="font-weight:500">(${items.length - shown.length} more)</span></button>` : "")
+      : '<p class="empty">No stories at this level in this period.</p>')
+    + criteriaBlock();
+}
+function criteriaBlock() {
+  const groups = SC.groups.map(g => `<tr><td><b>${esc(g.name)}</b><br><span style="color:var(--muted)">up to ${g.max}</span></td><td>${g.signals.map(esc).join(" · ")}</td></tr>`).join("");
+  const caps = (SC.caps || []).map(c => `<tr><td><b>Capped at ${c.cap}</b></td><td>${esc(c.label)}</td></tr>`).join("");
+  const levels = SC.levels.map(l => `<span class="sev" style="--sc:${esc(l.color)}">${esc(l.name)}</span> ${l.min}+`).join(" &nbsp; ");
+  return `<details class="criteria"><summary>How stories are scored</summary>
+    <p>Each story gets points from every group below (evidence from all outlets covering it counts), up to the group's limit, for a score out of 100. ${levels}</p>
+    <table><tbody>${groups}${caps}</tbody></table>
+    <p>Recency isn't part of the score, so older severe stories stay near the top. The full rules are in <code>secnews/data/scoring.json</code>.</p></details>`;
+}
+
 function viewSection(id, list) {
-  const items = collapse(list.filter(a => a.topics.includes(id)));
+  const items = sorted(collapse(list.filter(a => a.topics.includes(id))));
   const head = `<h1 class="page-head" style="--c:${topicColor[id] || "var(--navy)"}">${esc(topicName[id] || id)}</h1>
-    <p class="page-sub">${items.length} stor${items.length === 1 ? "y" : "ies"}</p>`;
+    <div class="top-controls"><p class="page-sub" style="margin:0">${items.length} stor${items.length === 1 ? "y" : "ies"}</p>${sortToggle()}</div>`;
   return head + activeFiltersBar() + rowsWithMore(items, emptyForTime(filtered(true).filter(a => a.topics.includes(id))));
 }
 
 function viewSearch(q, list) {
   const needle = q.toLowerCase();
-  const items = collapse(list.filter(a => (a.title + " " + a.summary + " " + a.cves.join(" ") + " " + a.source).toLowerCase().includes(needle)));
-  return `<h1 class="page-head">Search results</h1><p class="page-sub">${items.length} stor${items.length === 1 ? "y" : "ies"} matching “${esc(q)}”</p>`
+  const items = sorted(collapse(list.filter(a => (a.title + " " + a.summary + " " + a.cves.join(" ") + " " + a.source).toLowerCase().includes(needle))));
+  return `<h1 class="page-head">Search results</h1><div class="top-controls"><p class="page-sub" style="margin:0">${items.length} stor${items.length === 1 ? "y" : "ies"} matching “${esc(q)}”</p>${sortToggle()}</div>`
     + activeFiltersBar() + rowsWithMore(items, '<p class="empty">No stories match your search. Try a vendor, product, threat actor or CVE ID.</p>');
 }
+
+const sorted = (items) => state.sort === "severity" ? [...items].sort(bySeverity) : items;
+const sortToggle = () => `<div class="seg" role="group" aria-label="Sort">${[["latest", "Newest"], ["severity", "Most severe"]]
+  .map(([v, l]) => `<button type="button" data-sort="${v}" aria-pressed="${state.sort === v}">${l}</button>`).join("")}</div>`;
 
 function viewSaved() {
   // Saved stories are kept in the browser, so they still show after next week's report replaces this one.
@@ -495,7 +586,7 @@ function viewCve(list) {
 function route() {
   const h = location.hash.replace(/^#\/?/, "");
   if (h.startsWith("section/")) return { name: "section", id: decodeURIComponent(h.slice(8)) };
-  if (h === "saved" || h === "cve") return { name: h };
+  if (h === "saved" || h === "cve" || h === "top") return { name: h };
   return { name: "latest" };
 }
 
@@ -506,6 +597,7 @@ function render(resetLimit = true) {
   if (q) html = viewSearch(q, list);
   else if (r.name === "section") html = viewSection(r.id, list);
   else if (r.name === "saved") html = viewSaved();
+  else if (r.name === "top") html = viewTop(list);
   else if (r.name === "cve") { html = viewCve(list); markWatchSeen(); }
   else html = viewLatest(list);
   $("main").innerHTML = html;
@@ -520,7 +612,9 @@ function renderNav(r, q) {
   arts.forEach(a => a.topics.forEach(t => counts[t] = (counts[t] || 0) + 1));
   const cur = (name, id) => !q && r.name === name && (id === undefined || r.id === id) ? ' aria-current="page"' : "";
   const newHits = watch.length ? arts.filter(a => a.date && a.date.getTime() > watchSeen && watchHits(a).length).length : 0;
+  const severeNow = collapse(arts.filter(a => a.date && Date.now() - a.date.getTime() < 3 * 864e5)).filter(a => ["critical", "high"].includes(a.severity)).length;
   $("sections").innerHTML = `<a href="#/latest"${cur("latest")}>Latest</a>`
+    + `<a href="#/top"${cur("top")}>Top threats${severeNow ? `<span class="pill" title="Critical or High in the last 3 days">${severeNow}</span>` : ""}</a>`
     + topics.filter(t => counts[t.id] && t.id !== "general").map(t => `<a href="#/section/${t.id}"${cur("section", t.id)}>${esc(t.name)}</a>`).join("")
     + `<span class="spacer"></span><a href="#/saved"${cur("saved")}>Saved<span class="count">${Object.keys(saved).length}</span></a>`
     + `<a href="#/cve"${cur("cve")}>CVE Watch${newHits ? `<span class="pill" title="New since your last visit">${newHits}</span>` : ""}</a>`;
@@ -666,6 +760,9 @@ function clearAll() {
 // ---- Global events -----------------------------------------------------------------------------------
 $("main").addEventListener("click", (e) => {
   if (e.target.closest("#more")) { state.limit += PAGE; render(false); return; }
+  const td = e.target.closest("[data-topdays]"); if (td) { state.topDays = +td.dataset.topdays; render(); return; }
+  const tl = e.target.closest("[data-toplevel]"); if (tl) { state.topLevel = tl.dataset.toplevel; render(); return; }
+  const so = e.target.closest("[data-sort]"); if (so) { state.sort = so.dataset.sort; keep("secnews:sort", state.sort); render(); return; }
   const w = e.target.closest(".widen"); if (w) { $("from").value = ""; setDays(+w.dataset.days); render(); return; }
   if (e.target.closest("#clearAll")) clearAll();
 });

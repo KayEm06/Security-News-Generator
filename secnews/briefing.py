@@ -55,8 +55,8 @@ def _coverage(a: Article) -> int:
 
 
 def pick_stories(articles: list[Article], limit: int) -> list[Article]:
-    """Most-covered stories first (reported by several outlets), then newest."""
-    ranked = sorted(articles, key=lambda a: (_coverage(a), _ts(a)), reverse=True)
+    """Most severe stories first (see scoring.py), then the most widely reported, then newest."""
+    ranked = sorted(articles, key=lambda a: (a.score, _coverage(a), _ts(a)), reverse=True)
     return ranked[:limit]
 
 
@@ -75,13 +75,18 @@ def _ts(a: Article) -> datetime:
 
 def plan_briefing(articles: list[Article], now: datetime, *, hours: int = 24, focus: list[str] | None = None,
                   focus_names: str = "", min_focus: int = 5, max_focus: int = 12, catchup_days: int = 14,
-                  general: int = 3, limit: int = 15, already_sent: set[str] | None = None) -> list[Section]:
+                  general: int = 3, limit: int = 15, already_sent: set[str] | None = None,
+                  dont_miss: int = 3, dont_miss_days: int = 3, dont_miss_levels: tuple[str, ...] = ("critical", "high")) -> list[Section]:
     """Choose what goes in the briefing.
 
     Without ``focus``: the day's most widely reported stories. With ``focus`` (topic ids such as
     ``ics-ot``): the day's stories on those topics first; if there are fewer than ``min_focus``, older
     focus stories from the last ``catchup_days`` that haven't been sent before; then the ``general``
     biggest other stories of the day so nothing major is missed.
+
+    Either way, a "Don't miss" section adds up to ``dont_miss`` Critical/High stories from the last
+    ``dont_miss_days`` that haven't been in a briefing yet, so a severe story is never lost under a busy day.
+    Stories are ranked by severity (see scoring.py).
     """
     sent = already_sent or set()
     since = now - timedelta(hours=hours)
@@ -90,12 +95,13 @@ def plan_briefing(articles: list[Article], now: datetime, *, hours: int = 24, fo
                   if latest(a) and not any(x.link in sent for x in [a, *a.related])]
     fresh = [a for a in candidates if latest(a) >= since]
     if not focus:
-        return [Section("Today's top security stories", pick_stories(fresh, limit))]
+        return _with_dont_miss([Section("Today's top security stories", pick_stories(fresh, limit))],
+                               candidates, now, dont_miss, dont_miss_days, dont_miss_levels)
 
     wanted = set(focus)
     is_focus = lambda a: bool(wanted & set(a.topics))  # noqa: E731
-    # Primary-topic matches first, then most widely reported, then newest.
-    rank = lambda a: (a.primary_topic in wanted, _coverage(a), latest(a))  # noqa: E731
+    # Primary-topic matches first, then most severe, then most widely reported, then newest.
+    rank = lambda a: (a.primary_topic in wanted, a.score, _coverage(a), latest(a))  # noqa: E731
     today = sorted((a for a in fresh if is_focus(a)), key=rank, reverse=True)[:max_focus]
     sections = [Section(f"Today in {focus_names}", today,
                         "" if today else f"No new {focus_names} stories in the last {hours} hours.",
@@ -115,6 +121,22 @@ def plan_briefing(articles: list[Article], now: datetime, *, hours: int = 24, fo
         top = pick_stories(others, general)
         if top:
             sections.append(Section("Also in security today", top))
+    return _with_dont_miss(sections, candidates, now, dont_miss, dont_miss_days, dont_miss_levels)
+
+
+def _with_dont_miss(sections: list[Section], candidates: list[Article], now: datetime, limit: int, days: int,
+                    levels: tuple[str, ...]) -> list[Section]:
+    """Add the most severe unsent stories of the last few days that aren't already in this briefing."""
+    if not limit:
+        return sections
+    shown = {a.link for sec in sections for a in sec.stories}
+    since = now - timedelta(days=days)
+    severe = sorted((a for a in candidates if a.severity in levels and latest(a) >= since and a.link not in shown),
+                    key=lambda a: (a.score, latest(a)), reverse=True)[:limit]
+    if severe:
+        sections.insert(1 if len(sections) > 1 else len(sections), Section(
+            "Don't miss", severe, f"The most severe stories of the last {days} days that haven't been in a briefing yet.",
+            catch_up=True))
     return sections
 
 
@@ -228,6 +250,23 @@ def _also_html(a: Article, show: int = 4) -> str:
     return f" &middot; also covered by {', '.join(parts[:show])}{more}"
 
 
+SEVERITY_STYLE = {"critical": ("Critical", "#b00020"), "high": ("High", "#d9480f"), "medium": ("Medium", "#8a6d00")}
+
+
+def _severity_html(a: Article) -> tuple[str, str]:
+    """(label shown before the topic, 'why' line) for Critical/High/Medium stories."""
+    if a.severity not in SEVERITY_STYLE:
+        return "", ""
+    name, colour = SEVERITY_STYLE[a.severity]
+    label = (f'<span style="display:inline-block;background:{colour};color:#fff;padding:1px 6px;margin-right:6px;'
+             f'letter-spacing:.04em">{name} {a.score}</span>')
+    why = ""
+    if a.severity in ("critical", "high"):
+        reasons = ", ".join([r["label"] for r in a.reasons if r["points"] > 0][:4])
+        why = f'<div style="font-size:12px;color:{colour};margin-top:3px">Why: {html.escape(reasons)}</div>' if reasons else ""
+    return label, why
+
+
 def _story_rows(stories: list[Article], taxonomy: Taxonomy, catch_up: bool, label_topics: tuple[str, ...] = ()) -> str:
     e = html.escape
     color = {t.id: t.color or NAVY for t in taxonomy.topics}
@@ -237,15 +276,16 @@ def _story_rows(stories: list[Article], taxonomy: Taxonomy, catch_up: bool, labe
         label = taxonomy.name_of(topic) if topic != "general" else "Security"
         when = f" &middot; {a.published.strftime('%d %b')}" if catch_up and a.published else ""
         also = _also_html(a)
+        sev, why = _severity_html(a)
         cves = f"<br><span style=\"color:#b91c1c;font-size:12px\">{e(', '.join(a.cves[:6]))}</span>" if a.cves else ""
         img = (f'<td width="120" valign="top" style="padding:0 14px 0 0"><img src="{e(a.image)}" width="120" alt="" '
                f'style="display:block;width:120px;height:auto;border:0"></td>') if a.image.startswith("https://") else ""
         rows.append(f"""
 <tr><td style="padding:16px 0;border-bottom:1px solid #e5e5e5">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>{img}<td valign="top">
-    <div style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:{color.get(topic, NAVY)}">{e(label)}</div>
+    <div style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:{color.get(topic, NAVY)}">{sev}{e(label)}</div>
     <a href="{e(a.link)}" style="display:block;margin:4px 0;font-size:16px;font-weight:700;line-height:1.3;color:#000;text-decoration:none">{e(a.title)}</a>
-    <div style="font-size:12px;color:{NAVY}">{e(a.source)}{when}{also}</div>
+    <div style="font-size:12px;color:{NAVY}">{e(a.source)}{when}{also}</div>{why}
     <div style="margin-top:6px;font-size:13px;line-height:1.45;color:#333">{e(a.summary[:320])}{'…' if len(a.summary) > 320 else ''}</div>{cves}
   </td></tr></table>
 </td></tr>""")

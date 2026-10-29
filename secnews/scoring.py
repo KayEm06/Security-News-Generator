@@ -22,6 +22,7 @@ from .models import Article
 from .stories import outlets
 
 DATA = Path(__file__).parent / "data"
+SUMMARY_CHARS = 700  # the opening of a summary carries the facts; reading less keeps scoring fast
 
 CVSS_RE = re.compile(
     r"\bCVSS(?:\s*v?\d(?:\.\d)?)?(?:\s+base)?(?:\s+score)?(?:\s+(?:of|is|rated|at))?\s*[:=]?\s*\(?(\d{1,2}(?:\.\d)?)(?!\d)", re.I)
@@ -46,11 +47,21 @@ def _number(num: str, mult: str | None) -> float:
     return value * _MULT.get((mult or "").lower(), 1)
 
 
+_EDGE_L, _EDGE_R = r"(?<!\w)", r"(?!\w)"
+
+
 def _regex(keywords: list[str], patterns: list[str]) -> re.Pattern | None:
-    """One regex for a signal: its keywords (matched like categories.json) plus any raw patterns."""
-    parts = []
+    """One regex for a signal: its keywords (matched like categories.json) plus any raw patterns.
+
+    The keywords share one whole-word check around them all, which is much faster than one per keyword."""
+    bodies = []
     for _, pat, _ in _compile(keywords):
-        parts.append(f"(?:{pat.pattern})" if pat.flags & re.IGNORECASE else f"(?-i:{pat.pattern})")
+        body = pat.pattern
+        if body.startswith(_EDGE_L) and body.endswith(_EDGE_R):
+            body = body[len(_EDGE_L):-len(_EDGE_R)]
+        bodies.append(body if pat.flags & re.IGNORECASE else f"(?-i:{body})")
+    # Longest first, so "remote code execution" wins over a shorter overlapping keyword.
+    parts = [f"{_EDGE_L}(?:{'|'.join(sorted(bodies, key=len, reverse=True))}){_EDGE_R}"] if bodies else []
     parts += [f"(?:{p})" for p in patterns]
     return re.compile("|".join(parts), re.IGNORECASE) if parts else None
 
@@ -96,8 +107,8 @@ class Scorer:
                                    s.get("computed", ""), params, s.get("unless", "")))
             self.groups.append(Group(g["id"], g["name"], g["max"], sigs))
         self.negation = re.compile("|".join(data.get("negations", [])), re.I) if data.get("negations") else None
-        self.not_threat = re.compile("|".join(data.get("not_threats", [])), re.I) if data.get("not_threats") else None
-        self.not_threat_cap = data.get("not_threat_cap", 20)
+        # Kinds of headline that aren't an active threat (business news, arrests...), with the most they can score.
+        self.caps = [(c["label"], c["cap"], re.compile("|".join(c["patterns"]), re.I)) for c in data.get("caps", []) if c.get("patterns")]
         self.techniques = [Technique(t["id"], t["name"], t["tactic"], _regex(t.get("keywords", []), t.get("patterns", [])))
                            for t in data.get("ttps", [])]
         self.technique_names = {t.id: t.name for t in self.techniques}
@@ -140,7 +151,7 @@ class Scorer:
 
     def score_story(self, story: list[Article]) -> tuple[int, list[dict], list[str]]:
         """(score, reasons [{"label", "points"}], ATT&CK technique ids) for one story's articles."""
-        texts = [f"{a.title}. {a.summary}" for a in story]
+        texts = [f"{a.title}. {a.summary[:SUMMARY_CHARS]}" for a in story]
         # "No evidence of exploitation" mustn't count as exploitation.
         confirmed = [t for t in texts if not (self.negation and self.negation.search(t))]
         reasons, total = [], 0
@@ -164,11 +175,10 @@ class Scorer:
             total += g.max - room
         score = min(100, total)
         titles = [a.title for a in story]
-        if self.not_threat and sum(bool(self.not_threat.search(t)) for t in titles) * 2 > len(titles):
-            if score > self.not_threat_cap:
-                reasons.append({"group": "", "label": "Not a threat report (business news, event or guide)",
-                                "points": self.not_threat_cap - score})
-                score = self.not_threat_cap
+        for label, cap, regex in self.caps:  # most of the story's headlines are this kind of news
+            if score > cap and sum(bool(regex.search(t)) for t in titles) * 2 > len(titles):
+                reasons.append({"group": "", "label": label, "points": cap - score})
+                score = cap
         ttps = [t.id for t in self.techniques if t.regex and any(t.regex.search(x) for x in texts)]
         reasons.sort(key=lambda r: -r["points"])
         return score, reasons, ttps
@@ -195,6 +205,7 @@ class Scorer:
         return {
             "levels": [{"id": l["id"], "name": l["name"], "min": l["min"], "color": l.get("color", "")} for l in self.levels],
             "groups": [{"name": g.name, "max": g.max, "signals": [s.label for s in g.signals]} for g in self.groups],
+            "caps": [{"label": label, "cap": cap} for label, cap, _ in self.caps],
             "ttps": {t.id: {"name": t.name, "tactic": t.tactic} for t in self.techniques},
         }
 

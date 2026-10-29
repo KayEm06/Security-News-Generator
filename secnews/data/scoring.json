@@ -5,7 +5,7 @@
   "levels": [
     {"id": "critical", "name": "Critical", "min": 70, "color": "#b00020"},
     {"id": "high", "name": "High", "min": 50, "color": "#d9480f"},
-    {"id": "medium", "name": "Medium", "min": 30, "color": "#b08900"},
+    {"id": "medium", "name": "Medium", "min": 25, "color": "#b08900"},
     {"id": "low", "name": "Low", "min": 0, "color": "#64748b"}
   ],
 
@@ -13,12 +13,17 @@
     {"id": "exploitation", "name": "Exploitation", "max": 30, "signals": [
       {"id": "exploited", "label": "Actively exploited", "points": 30,
        "keywords": ["actively exploited", "exploited in the wild", "in-the-wild exploitation", "under active exploitation",
-                    "under attack", "exploited in attacks", "exploited as a zero-day", "exploited zero-day", "Known Exploited Vulnerabilities",
+                    "under active attack", "exploited in attacks", "exploited as a zero-day", "exploited zero-day", "Known Exploited Vulnerabilities",
                     "KEV catalog", "being exploited", "mass exploitation", "exploited to breach", "exploited to deploy", "exploited to hack"],
        "patterns": ["\\bexploit(ed|ing)\\b.{0,60}\\b(in attacks|in the wild|by (hackers|attackers|threat actors|ransomware))",
-                    "\\b(hackers|attackers|threat actors|ransomware gangs?|apts?)\\b.{0,40}\\bexploit(ed|ing|s)?\\b",
+                    "(?<!let )(?<!lets )(?<!allow )(?<!allows )(?<!enable )(?<!enables )(?<!help )(?<!helps )(?<!could )(?<!can )(?<!may )(?<!might )\\b(hackers|attackers|threat actors|cybercriminals|ransomware gangs?|apts?)\\s+(are\\s+|have\\s+|have been\\s+|now\\s+|actively\\s+|quickly\\s+|already\\s+)*exploit(ed|ing|s)?\\b",
                     "\\bexploitation (has )?(begun|began|started|under ?way)\\b", "\\bnow exploited\\b"]},
       {"id": "zero-day", "label": "Zero-day", "points": 20, "keywords": ["zero-day", "zero day", "0-day", "0day"]},
+      {"id": "supply-chain-compromise", "label": "Software supply chain compromised", "points": 20,
+       "keywords": ["supply chain attack", "supply-chain attack", "supply chain compromise", "compromised package",
+                    "compromised packages", "malicious version", "malicious versions", "malicious update", "trojanized",
+                    "backdoored", "poisoned package", "hijacked package", "compromised release", "hijacked updates"],
+       "patterns": ["\\bhijack(ed|s|ing)?\\b.{0,40}\\b(software )?updates?\\b", "\\bcompromised\\b.{0,30}\\b(npm|pypi|package|release|extension|plugin)s?\\b"]},
       {"id": "poc", "label": "Public exploit or exploitation attempts", "points": 15,
        "keywords": ["proof-of-concept", "proof of concept", "PoC", "exploit code", "exploit released", "public exploit",
                     "working exploit", "exploitation attempts", "scanning for", "scans for"]}
@@ -39,7 +44,7 @@
     {"id": "impact", "name": "Impact & scale", "max": 25, "signals": [
       {"id": "scale", "label": "People, records or devices affected", "computed": "scale",
        "_tiers": "affected count -> points",
-       "tiers": [[100000000, 20], [10000000, 16], [1000000, 12], [100000, 8], [10000, 4]]},
+       "tiers": [[100000000, 20], [10000000, 16], [1000000, 13], [100000, 10], [10000, 5]]},
       {"id": "money", "label": "Money stolen or lost", "computed": "money",
        "tiers": [[100000000, 12], [10000000, 9], [1000000, 5]]},
       {"id": "physical", "label": "Real-world / physical impact", "points": 10,
@@ -56,7 +61,7 @@
                     "forced to shut", "flights cancelled", "cancelled flights", "power outage", "blackout", "unable to operate"]},
       {"id": "destructive", "label": "Destructive attack", "points": 8,
        "keywords": ["wiper", "data destruction", "destructive", "bricked", "sabotage", "encrypted systems", "encrypted servers"]},
-      {"id": "data-theft", "label": "Data stolen or exposed", "points": 5,
+      {"id": "data-theft", "label": "Data stolen or exposed", "points": 8,
        "keywords": ["data breach", "data theft", "stolen data", "stole data", "exfiltrated", "leaked data", "data leak",
                     "exposed data", "personal data", "personal information", "customer data", "patient data", "records exposed"]}
     ]},
@@ -118,13 +123,23 @@
   "negations": ["\\bno (evidence|signs?|indications?|reports?)\\b.{0,40}\\bexploit", "\\bnot (been |being |yet |known to have been )?(actively )?exploited\\b",
                 "\\bnot aware of .{0,40}\\bexploit", "\\bno known (active )?exploitation\\b", "\\bunaware of any .{0,30}exploit"],
 
-  "_not_threats": "Headlines like these aren't threat reports (funding, deals, listicles, events, opinion), so their score is capped at not_threat_cap.",
-  "not_threat_cap": 20,
-  "not_threats": ["raises \\$", "raised \\$", "\\bfunding\\b", "series [a-e]\\b", "\\bacquire[sd]?\\b", "\\bacquisition\\b", "\\bmerger\\b",
-                  "\\bbest\\b.{0,60}\\b(tools|platforms|software|solutions)\\b", "\\bcompared\\b.{0,40}features", "\\bwebinar\\b",
-                  "\\bpodcast\\b", "\\bhow to\\b", "\\btips\\b", "\\bopinion\\b", "\\binterview\\b", "\\bconversations?:", "\\bsurvey\\b",
-                  "\\bpartners? with\\b", "\\blaunch(es|ed)?\\b.{0,40}\\b(platform|product|tool|service)\\b", "\\bappoints?\\b", "\\bhires?\\b",
-                  "\\bnamed (ceo|ciso|cto)\\b", "\\bawards?\\b", "\\bconference\\b", "\\bsponsored\\b", "\\breview:"],
+  "_caps": "Headlines like these aren't reports of an active threat, so a story whose headlines mostly match is capped at that score. Business news, events, guides, listicles and bug bounties: Low. Arrests, court cases and takedowns: at most Medium (useful context for a bulletin, but not something to act on).",
+  "caps": [
+    {"label": "Not a threat report (business news, round-up, event, guide or bug bounty)", "cap": 20,
+     "patterns": ["raises \\$", "raised \\$", "\\bfunding\\b", "series [a-e]\\b", "\\bacquires?\\b", "\\bacquired\\b", "\\bacquisition\\b",
+                  "\\bmerger\\b", "\\bbest\\b.{0,60}\\b(tools|platforms|software|solutions)\\b", "\\bcompared\\b.{0,40}features",
+                  "^\\s*\\d+\\s+(best\\s+|top\\s+)?[^:]{0,60}\\b(tools|platforms|solutions|software|vendors|companies|apps)\\b",
+                  "buyer[\u2019']?s\\s+(guide|verdict)", "\\bguide\\b", "\\bbug bount(y|ies)\\b", "\\bwebinar\\b", "\\bpodcast\\b", "\\bhow to\\b",
+                  "\\btips\\b", "\\bopinion\\b", "\\binterview\\b", "\\bconversations?:", "\\bsurvey\\b", "\\bpartners? with\\b",
+                  "\\blaunch(es|ed)?\\b.{0,40}\\b(platform|product|tool|service)\\b", "\\bappoints?\\b", "\\bhires?\\b",
+                  "\\bnamed (ceo|ciso|cto)\\b", "\\bawards?\\b", "\\bconference\\b", "\\bsponsored\\b", "\\breview:",
+                  "\\b(recap|round-?up|week in review|weekly update|this week in|in other news|newsletter|digest|stormcast)\\b"]},
+    {"label": "Law-enforcement or court news", "cap": 45,
+     "patterns": ["\\bsentenced\\b", "\\bpleads? guilty\\b", "\\bpleaded guilty\\b", "\\bextradited\\b", "\\bindicted\\b",
+                  "\\bcharged (with|over|in)\\b", "\\bcharges\\b", "\\barrest(s|ed)?\\b", "\\bconvicted\\b", "\\bprison\\b",
+                  "\\b(fbi|police|europol|interpol|doj|justice department|authorities|law enforcement|microsoft|feds)\\b.{0,30}\\b(disrupts?|disrupted|seizes?|seized|takes? down|took down|dismantles?|dismantled|shuts? down)\\b",
+                  "\\btakedown\\b", "\\bdomain seizures?\\b", "\\breward\\b"]}
+  ],
 
   "_ttps": "MITRE ATT&CK techniques spotted in a story's coverage (shown with the score, and counted in the Markdown bulletin).",
   "ttps": [

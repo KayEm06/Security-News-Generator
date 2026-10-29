@@ -56,11 +56,14 @@ Clearing your browser data, or using a private window, removes them. If you use 
 
 ### What goes in it
 
-The briefing is set up as an **IoT & ICS/OT Daily Briefing**. Each email has up to three sections:
+The briefing is set up as an **IoT & ICS/OT Daily Briefing**. Each email has up to four sections:
 
-1. **Today in IoT & ICS/OT:** stories from the last 24 hours tagged *ICS / OT & Critical Infrastructure* or *IoT & Hardware*. Stories mainly about those topics come first, then the most widely reported, then the newest.
+1. **Today in IoT & ICS/OT:** stories from the last 24 hours tagged *ICS / OT & Critical Infrastructure* or *IoT & Hardware*. Stories mainly about those topics come first, then the most severe (see [How stories are scored](#how-stories-are-scored)), then the most widely reported.
 2. **Catch up:** only when there are fewer than 5 new focus stories. It tops up with IoT/ICS stories from the last 14 days that haven't been in a briefing before. The tool logs what it has sent (`briefing-sent.json`, next to the archive), so nothing is repeated. After a test send, `--forget-sent YYYY-MM-DD` (or the *Run workflow* box on the Daily briefing email workflow) undoes that day's entry so the stories can go out again.
-3. **Also in security today:** the day's three most widely reported other stories, so nothing major is missed.
+3. **Don't miss:** up to three Critical or High stories from the last 3 days that haven't been in a briefing yet, so a severe story is never lost under a busy news day.
+4. **Also in security today:** the day's three most severe other stories, so nothing major is missed.
+
+Critical, High and Medium stories carry a severity label, and Critical and High ones say why.
 
 All of this is set in `secnews/data/site.json`:
 
@@ -265,6 +268,30 @@ How it decides:
 - Round-ups ("Weekly recap", "In Other News", podcasts, webinars) never join a story.
 
 The settings are at the top of `secnews/stories.py`. `--no-merge` turns grouping off.
+
+## How stories are scored
+
+Every story gets a severity score from 0 to 100, so the most important threats rise to the top whatever day they broke. The site's **Top threats** page ranks stories by score (last 24 hours, 3 days, 7 days or 30 days). The front page leads with the most severe stories of the last 3 days. Section and search pages can sort by *Most severe*. The Markdown digest opens with a **Top threats** table and the **ATT&CK techniques seen** in the period.
+
+The criteria follow how threat-intelligence teams triage. Evidence from every outlet covering a story counts: one may report the CVSS score, another that it's being exploited.
+
+| Criterion | What earns points | Up to |
+|---|---|---:|
+| Exploitation | actively exploited or in CISA's KEV catalog (30), software supply chain compromised (20), zero-day (20), public exploit or exploitation attempts (15) | 30 |
+| Technical severity | CVSS 9+ or "critical" (15), CVSS 7+ (8), unauthenticated / pre-auth / remote code execution / zero-click / wormable (10) | 20 |
+| Impact & scale | people, records or devices affected (5–20 by scale), money stolen (5–12), real-world or physical impact (10), operations disrupted (8), destructive (8), data stolen (8), widespread (5) | 25 |
+| Threat actor & TTPs | nation-state / APT (10), supply chain (10), ransomware (8), worms and mass exploitation (8), backdoors and implants (5) | 15 |
+| Target criticality | critical-infrastructure sector (8), ICS / OT (8), widely deployed edge or enterprise product such as VPNs, firewalls, Exchange, Ivanti or Citrix (7) | 15 |
+| World importance | how many outlets cover it (3–14), government advisory or directive (6), geopolitical context (5) | 20 |
+
+Levels: **Critical** 70+, **High** 50+, **Medium** 25+, **Low** below 25. A few kinds of story are capped:
+- Business news, round-ups, guides, listicles, webinars and bug bounties are capped at 20, so they never outrank a threat.
+- Arrests, court cases and takedowns are capped at 45 (Medium): useful context, but not something to act on.
+- "No evidence of exploitation" and "could let hackers…" don't count as exploitation.
+
+Each story also lists the **MITRE ATT&CK techniques** its coverage describes (e.g. T1190 Exploit Public-Facing Application, T1566 Phishing, T1486 Data Encrypted for Impact, plus ICS techniques such as T0883).
+
+On the site, *Why High · 58/100* under a story shows exactly where its points came from. How recent a story is doesn't change its score. All the rules are in `secnews/data/scoring.json`: change points, keywords, levels or caps there, or pass your own copy with `--scoring-file`.
 
 ## Categories
 
