@@ -175,8 +175,8 @@ class Scorer:
             total += g.max - room
         score = min(100, total)
         titles = [a.title for a in story]
-        for label, cap, regex in self.caps:  # most of the story's headlines are this kind of news
-            if score > cap and sum(bool(regex.search(t)) for t in titles) * 2 > len(titles):
+        for label, cap, regex in self.caps:  # at least a third of the story's headlines are this kind of news
+            if score > cap and sum(bool(regex.search(t)) for t in titles) * 3 >= len(titles):
                 reasons.append({"group": "", "label": label, "points": cap - score})
                 score = cap
         ttps = [t.id for t in self.techniques if t.regex and any(t.regex.search(x) for x in texts)]

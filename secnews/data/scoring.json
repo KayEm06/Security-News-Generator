@@ -113,9 +113,9 @@
        "keywords": ["joint advisory", "emergency directive", "CISA warns", "CISA urges", "CISA orders", "NCSC warns", "FBI warns",
                     "NSA warns", "binding operational directive", "federal agencies ordered", "orders federal agencies"]},
       {"id": "geopolitics", "label": "Geopolitical context", "points": 5,
-       "keywords": ["war", "invasion", "election", "elections", "election interference", "sanctions", "sanctioned",
-                    "hacktivist", "hacktivists", "military", "ministry of defence", "ministry of defense", "Ukraine", "Taiwan",
-                    "Israel", "NATO"]}
+       "keywords": ["invasion", "war in Ukraine", "Russia-Ukraine war", "wartime", "election interference", "election security",
+                    "influence operation", "influence operations", "disinformation campaign", "sanctions", "hacktivist", "hacktivists",
+                    "military networks", "ministry of defence", "ministry of defense", "NATO"]}
     ]}
   ],
 
@@ -123,7 +123,7 @@
   "negations": ["\\bno (evidence|signs?|indications?|reports?)\\b.{0,40}\\bexploit", "\\bnot (been |being |yet |known to have been )?(actively )?exploited\\b",
                 "\\bnot aware of .{0,40}\\bexploit", "\\bno known (active )?exploitation\\b", "\\bunaware of any .{0,30}exploit"],
 
-  "_caps": "Headlines like these aren't reports of an active threat, so a story whose headlines mostly match is capped at that score. Business news, events, guides, listicles and bug bounties: Low. Arrests, court cases and takedowns: at most Medium (useful context for a bulletin, but not something to act on).",
+  "_caps": "Headlines like these aren't reports of an active threat, so a story where at least a third of the headlines match is capped at that score. Business news, events, guides, listicles and bug bounties: Low. Arrests, court cases and takedowns: at most Medium (useful context for a bulletin, but not something to act on).",
   "caps": [
     {"label": "Not a threat report (business news, round-up, event, guide or bug bounty)", "cap": 20,
      "patterns": ["raises \\$", "raised \\$", "\\bfunding\\b", "series [a-e]\\b", "\\bacquires?\\b", "\\bacquired\\b", "\\bacquisition\\b",
@@ -133,10 +133,11 @@
                   "\\btips\\b", "\\bopinion\\b", "\\binterview\\b", "\\bconversations?:", "\\bsurvey\\b", "\\bpartners? with\\b",
                   "\\blaunch(es|ed)?\\b.{0,40}\\b(platform|product|tool|service)\\b", "\\bappoints?\\b", "\\bhires?\\b",
                   "\\bnamed (ceo|ciso|cto)\\b", "\\bawards?\\b", "\\bconference\\b", "\\bsponsored\\b", "\\breview:",
-                  "\\b(recap|round-?up|week in review|weekly update|this week in|in other news|newsletter|digest|stormcast)\\b"]},
+                  "\\b(recap|round-?up|week in review|weekly update|this week in|in other news|newsletter|digest|stormcast)\\b",
+                  "\\bcompliance\\b", "\\bhow\\b.{0,40}\\b(supports?|helps?|enables?)\\b"]},
     {"label": "Law-enforcement or court news", "cap": 45,
      "patterns": ["\\bsentenced\\b", "\\bpleads? guilty\\b", "\\bpleaded guilty\\b", "\\bextradited\\b", "\\bindicted\\b",
-                  "\\bcharged (with|over|in)\\b", "\\bcharges\\b", "\\barrest(s|ed)?\\b", "\\bconvicted\\b", "\\bprison\\b",
+                  "\\bcharged (with|over|in)\\b", "\\bcharges\\b", "\\barrest(s|ed)?\\b", "\\bconvicted\\b", "\\bprison\\b", "\\bjailed\\b", "\\bgets \\d+ (years|months)\\b",
                   "\\b(fbi|police|europol|interpol|doj|justice department|authorities|law enforcement|microsoft|feds)\\b.{0,30}\\b(disrupts?|disrupted|seizes?|seized|takes? down|took down|dismantles?|dismantled|shuts? down)\\b",
                   "\\btakedown\\b", "\\bdomain seizures?\\b", "\\breward\\b"]}
   ],
