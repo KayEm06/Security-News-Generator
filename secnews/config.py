@@ -35,6 +35,13 @@ class Category:
     name: str
     keywords: list[str]
     color: str = ""
+    # Looser words that only count for a publication about this sector (e.g. "health" from HIPAA Journal),
+    # where they're reliable, unlike in general news.
+    sector_keywords: list[str] = field(default_factory=list)
+
+
+def _category(c: dict) -> Category:
+    return Category(**{k: v for k, v in c.items() if not k.startswith("_")})  # "_..." keys are notes
 
 
 @dataclass
@@ -61,9 +68,9 @@ def load_sources(path: Path | str | None = None) -> list[Source]:
 def load_taxonomy(path: Path | str | None = None) -> Taxonomy:
     data = json.loads(Path(path or DEFAULT_CATEGORIES).read_text(encoding="utf-8"))
     return Taxonomy(
-        topics=[Category(**c) for c in data["topics"]],
-        industries=[Category(**c) for c in data["industries"]],
-        locations=[Category(**c) for c in data.get("locations", [])],
+        topics=[_category(c) for c in data["topics"]],
+        industries=[_category(c) for c in data["industries"]],
+        locations=[_category(c) for c in data.get("locations", [])],
         topic_min_score=data.get("topic_min_score", 1),
         industry_min_score=data.get("industry_min_score", 2),
         location_min_score=data.get("location_min_score", 2),

@@ -224,7 +224,15 @@ class ClassifierTests(unittest.TestCase):
 
     def test_source_forced_industry(self):
         c = Classifier(TAX, [Source("HIPAA Journal", "x", industries=["healthcare"])])
-        self.assertEqual(c.classify(Article(title="Weekly roundup", link="x", source="HIPAA Journal")).industries, ["healthcare"])
+        hj = lambda title, summary="", tags=(): c.classify(  # noqa: E731
+            Article(title=title, link="x", source="HIPAA Journal", summary=summary, feed_tags=list(tags))).industries
+        # one mention is enough from a healthcare publication (normally a title hit or two mentions are needed)
+        self.assertEqual(hj("Data breach affects 40,000", "Patient names and records were exposed."), ["healthcare"])
+        # its general security news isn't healthcare, even with the site's own HIPAA category on it
+        self.assertEqual(hj("Ivanti Connect Secure zero-day exploited", "Apply the patch now.", ["HIPAA News"]), [])
+        # looser sector words count from a healthcare publication, but not from general news
+        self.assertIn("healthcare", hj("Bacon County Health Services Investigating Cyber Incident"))
+        self.assertNotIn("healthcare", tagged("Bacon County Health Services Investigating Cyber Incident").industries)
 
     def test_publisher_tags_count_strongly(self):
         a = Classifier(TAX).classify(Article(title="Weekly roundup", link="x", source="T", feed_tags=["Healthcare"]))
@@ -284,6 +292,207 @@ class DedupFilterTests(unittest.TestCase):
         self.assertEqual(resolve_ids(["us"], TAX.locations, "location"), {"north-america"})
         with self.assertRaises(ValueError):
             resolve_ids(["nonsense"], TAX.topics, "topic")
+
+
+class StoryTests(unittest.TestCase):
+    T0 = datetime(2026, 10, 10, 9, tzinfo=timezone.utc)
+
+    def corpus(self):
+        def art(title, src, hours, summary="", cves=(), image=""):
+            return Article(title=title, link=f"https://{src.replace(' ', '').lower()}/{abs(hash(title))}", source=src,
+                           published=self.T0 + timedelta(hours=hours), summary=summary, cves=list(cves), image=image,
+                           source_type="news")
+        same = [
+            art("Salt Typhoon hackers breached more US telecom providers, FBI says", "The Record", 0,
+                "The FBI said the Chinese state-sponsored group Salt Typhoon compromised more telecommunications firms."),
+            art("FBI: Salt Typhoon breached at least nine US telecoms", "BleepingComputer", 4,
+                "Chinese state hackers known as Salt Typhoon breached telecommunications firms.", image="https://img/1.jpg"),
+            art("Salt Typhoon exploits Cisco routers to target telecom networks", "The Hacker News", 9,
+                "Chinese threat actor Salt Typhoon abused Cisco IOS XE flaws to breach telecom providers."),
+        ]
+        cve = [
+            art("Ivanti warns of exploited Connect Secure bug", "SecurityWeek", 1, "CVE-2026-1101 is exploited.", ["CVE-2026-1101"]),
+            art("CISA adds Ivanti flaw to KEV catalog", "CISA", 30, "Ivanti Connect Secure CVE-2026-1101.", ["CVE-2026-1101"]),
+        ]
+        other_cve = art("Ivanti EPMM flaw exploited", "SecurityWeek", 6, "CVE-2026-2002 in Endpoint Manager.", ["CVE-2026-2002"])
+        late = art("Salt Typhoon targets telecom firms again", "The Record", 24 * 9, "Salt Typhoon is back at telecoms.")
+        recap = art("Weekly recap: Salt Typhoon, Ivanti and more", "The Hacker News", 20, "Salt Typhoon telecom breaches, Ivanti.")
+        filler = [art(t, "Filler", h) for h, t in enumerate([
+            "Google fixes Chrome V8 type confusion", "Microsoft Teams adds URL protection", "Fortinet FortiWeb bug exploited",
+            "Startup raises funding for AI security", "Ransomware hits hospitals in Ohio", "Europol takes down botnet",
+            "Android banking trojan targets Europe", "UK sanctions GRU officers", "PyPI packages steal Discord tokens",
+            "NERC proposes new grid standards", "Solar inverter flaws found", "ESP32 secure boot glitched"])]
+        return same, cve, other_cve, late, recap, filler
+
+    def test_groups_same_event_only(self):
+        from secnews.stories import group_stories
+        same, cve, other_cve, late, recap, filler = self.corpus()
+        arts = same + cve + [other_cve, late, recap] + filler
+        group_stories(arts)
+        self.assertEqual(len({a.story for a in same}), 1)  # different headlines, same event
+        self.assertEqual(same[0].story, same[1].link)  # represented by the article with a picture
+        self.assertEqual(len({a.story for a in cve}), 1)  # shared CVE
+        self.assertEqual(other_cve.story, other_cve.link)  # different CVE from the same vendor
+        self.assertEqual(late.story, late.link)  # same actor, but over a week later: a new story
+        self.assertEqual(recap.story, recap.link)  # round-ups never join a story
+        self.assertTrue(all(a.story == a.link for a in filler))
+
+    def test_one_outlets_posts_never_form_a_story(self):
+        from secnews.stories import group_stories
+        *_, filler = self.corpus()
+        same_site = [Article(title=f"12 Best {x} Tools Compared (2026): Features & Pricing", link=f"https://gb/{x}",
+                             source="GBHackers", published=self.T0 + timedelta(hours=i)) for i, x in enumerate(["SAST", "IAST", "ASPM"])]
+        group_stories(same_site + filler)
+        self.assertTrue(all(a.story == a.link for a in same_site))
+
+    def test_outlet_boilerplate_is_ignored(self):
+        from secnews.stories import group_stories
+        *_, filler = self.corpus()
+        tail = " Related: SecurityWeek webinar on zero trust and cloud identity with Okta and Wiz."
+        week = [Article(title=t, link=f"https://sw/{i}", source="SecurityWeek", published=self.T0 + timedelta(hours=i),
+                        summary=t + "." + tail) for i, t in enumerate([
+            "Atlassian patches critical flaw in eight products", "Arizona court system breach hits a million people",
+            "Hadrian raises $40 million for offensive security", "Oracle Health breach tally climbs to 20 million",
+            "US seeks alleged Hafnium hacker with $10 million reward", "Android October updates patch 25 flaws",
+            "Georgia Power data breach hits 400,000 accounts", "Apple tightens macOS full disk access controls"])]
+        others = [Article(title="Okta outage hits Wiz customers", link="https://o/1", source="The Record",
+                          published=self.T0 + timedelta(hours=2), summary="Okta and Wiz confirm an outage.")]
+        group_stories(week + others + filler)
+        self.assertTrue(all(a.story == a.link for a in week + others))
+
+    def test_collapse_and_leads(self):
+        from secnews.stories import group_stories, latest, leads, outlets
+        same, cve, *_, filler = self.corpus()
+        group_stories(same + cve + filler)  # word rarity needs a realistic number of articles
+        stories = leads(same + cve)
+        self.assertEqual(len(stories), 2)
+        salt = next(s for s in stories if "Salt" in s.title)
+        self.assertEqual(len(salt.related), 2)
+        self.assertEqual(outlets(salt), ["BleepingComputer", "The Hacker News", "The Record"])
+        self.assertEqual(latest(salt), same[2].published)
+
+    def test_briefing_shows_each_story_once_and_never_again(self):
+        from secnews.briefing import build_html, plan_briefing
+        from secnews.stories import group_stories
+        same, cve, *_ , filler = self.corpus()
+        arts = same + cve + filler
+        group_stories(arts)
+        now = self.T0 + timedelta(hours=12)
+        secs = plan_briefing(arts, now, hours=24, limit=20)
+        shown = [a for s in secs for a in s.stories]
+        self.assertEqual(sum("Salt Typhoon" in a.title for a in shown), 1)
+        self.assertIn("also covered by", build_html(secs, TAX, "T", now))
+        sent = {x.link for a in shown for x in [a, *a.related]}
+        later = plan_briefing(arts, now + timedelta(hours=1), hours=24, limit=20, already_sent=sent)
+        self.assertFalse([a for s in later for a in s.stories])
+
+    def test_markdown_lists_other_coverage(self):
+        from secnews.render import to_markdown
+        from secnews.stories import group_stories
+        same, *_, filler = self.corpus()
+        group_stories(same + filler)
+        md = to_markdown(same, TAX, {})
+        self.assertEqual(md.count("### ["), 1)
+        self.assertIn("Also covered by: [", md)
+        self.assertIn("3 sources, in 1 stories", md)
+
+
+class ScoringTests(unittest.TestCase):
+    T0 = datetime(2026, 10, 20, 9, tzinfo=timezone.utc)
+
+    def art(self, title, summary="", src="Test", hours=0, link=None, **kw):
+        a = Article(title=title, link=link or f"https://{src.replace(' ', '').lower()}/{abs(hash(title))}", source=src,
+                    published=self.T0 + timedelta(hours=hours), summary=summary, **kw)
+        Classifier(TAX).classify(a)
+        return a
+
+    def score(self, *arts):
+        from secnews.scoring import Scorer
+        return Scorer().score_story(list(arts))
+
+    def test_exploited_critical_edge_flaw_is_critical(self):
+        from secnews.scoring import Scorer
+        a = self.art("Palo Alto Networks warns of PAN-OS zero-day exploited in attacks",
+                     "An unauthenticated RCE flaw (CVSS 9.8) in PAN-OS firewalls is actively exploited by state-sponsored hackers.")
+        b = self.art("CISA orders agencies to patch PAN-OS flaw", "It was added to the Known Exploited Vulnerabilities catalog.",
+                     src="The Record", hours=3)
+        score, reasons, ttps = self.score(a, b)
+        labels = [r["label"] for r in reasons]
+        self.assertGreaterEqual(score, 70)
+        self.assertEqual(Scorer().level_of(score)["id"], "critical")
+        for want in ("Actively exploited", "Critical severity (CVSS 9+)", "Nation-state / APT", "Widely deployed edge/enterprise product"):
+            self.assertIn(want, labels)
+        self.assertIn("T1190", ttps)
+
+    def test_evidence_is_pooled_across_outlets(self):
+        one, _, _ = self.score(self.art("Fortinet patches FortiGate flaw", "A CVSS 9.8 bug."))
+        both, _, _ = self.score(self.art("Fortinet patches FortiGate flaw", "A CVSS 9.8 bug."),
+                                self.art("FortiGate bug exploited in the wild", src="Other", hours=2))
+        self.assertGreater(both, one + 25)
+
+    def test_negated_or_hypothetical_exploitation_doesnt_count(self):
+        for title, summary in [("Fortinet fixes FortiWeb flaw", "There is no evidence that it has been exploited in the wild."),
+                               ("Tailscale flaws could let hackers gain root access", "The bugs could let hackers exploit SSH servers.")]:
+            _, reasons, _ = self.score(self.art(title, summary))
+            self.assertNotIn("Actively exploited", [r["label"] for r in reasons], title)
+
+    def test_impact_scale_and_money(self):
+        _, reasons, _ = self.score(self.art("Denmark breach exposes 8.8 million people", "Attackers stole personal data of 8.8 million people."))
+        self.assertIn({"group": "Impact & scale", "label": "People, records or devices affected", "points": 13}, reasons)
+        _, reasons, _ = self.score(self.art("Ledger implant behind crypto heist", "Attackers drained $93 million from wallets."))
+        self.assertIn("Money stolen or lost", [r["label"] for r in reasons])
+        _, reasons, _ = self.score(self.art("US offers $10 million reward for hacker"))  # a reward isn't a loss
+        self.assertNotIn("Money stolen or lost", [r["label"] for r in reasons])
+
+    def test_non_threats_and_law_enforcement_are_capped(self):
+        score, reasons, _ = self.score(self.art("Startup raises $40 million for ransomware defence",
+                                                "Attackers actively exploited critical zero-day flaws in VPNs, it says."))
+        self.assertLessEqual(score, 20)
+        self.assertTrue(any(r["points"] < 0 for r in reasons))
+        score, _, _ = self.score(self.art("10 Best SAST Tools Compared (2026): Features & Pricing", "Actively exploited ransomware"))
+        self.assertLessEqual(score, 20)
+        score, _, _ = self.score(self.art("Ransomware affiliate sentenced to 70 months in prison",
+                                          "He exploited VPN zero-days in attacks on hospitals and stole $20 million in ransoms."))
+        self.assertLessEqual(score, 45)
+
+    def test_score_all_sets_every_article_of_a_story(self):
+        from secnews.scoring import Scorer
+        a = self.art("Ivanti zero-day exploited in attacks", link="https://a/1")
+        b = self.art("Ivanti VPN bug under active exploitation", src="Other", link="https://b/1")
+        b.story = a.story = a.link
+        lone = self.art("Weekly podcast episode", link="https://c/1")
+        counts = Scorer().score_all([a, b, lone])
+        self.assertEqual((a.score, a.severity, a.ttps), (b.score, b.severity, b.ttps))
+        self.assertEqual(sum(counts.values()), 2)
+        self.assertEqual(lone.severity, "low")
+
+    def test_markdown_bulletin_leads_with_top_threats(self):
+        from secnews.render import to_csv, to_markdown
+        from secnews.scoring import Scorer
+        arts = [self.art("Ivanti zero-day exploited in attacks", "Unauthenticated RCE in Connect Secure VPN, CVSS 9.8."),
+                self.art("Company appoints new CISO", hours=1)]
+        Scorer().score_all(arts)
+        md = to_markdown(arts, TAX, {})
+        self.assertIn("### Top threats", md)
+        self.assertIn("### ATT&CK techniques seen", md)
+        self.assertIn("T1190 Exploit Public-Facing Application", md)
+        self.assertIn("Why: Actively exploited (+30)", md)
+        self.assertIn("severity,score,why,attack_techniques", to_csv(arts, TAX, {}).splitlines()[0])
+
+    def test_briefing_dont_miss_catches_older_severe_story(self):
+        from secnews.briefing import build_html, plan_briefing
+        from secnews.scoring import Scorer
+        severe = self.art("Citrix NetScaler zero-day exploited in attacks", "Unauthenticated RCE, CVSS 9.8, exploited by ransomware gangs.",
+                          hours=-48)
+        today = [self.art(f"Minor update number {i}", "Nothing much.", hours=-i) for i in range(1, 6)]
+        Scorer().score_all([severe, *today])
+        now = self.T0
+        secs = plan_briefing([severe, *today], now, hours=24, limit=10)
+        self.assertEqual([s.heading for s in secs][-1], "Don't miss")
+        self.assertIs(secs[-1].stories[0], severe)
+        self.assertIn("Why: Actively exploited", build_html(secs, TAX, "T", now))
+        later = plan_briefing([severe, *today], now, hours=24, limit=10, already_sent={severe.link})
+        self.assertNotIn("Don't miss", [s.heading for s in later])
 
 
 class ConfigTests(unittest.TestCase):
